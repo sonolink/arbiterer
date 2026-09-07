@@ -40,6 +40,7 @@ const (
 	LogFormatJSON LogFormat = "json"
 )
 
+// UnmarshalText accepts either the text or the json log format.
 func (f *LogFormat) UnmarshalText(text []byte) error {
 	switch format := LogFormat(text); format {
 	case LogFormatText, LogFormatJSON:
@@ -103,7 +104,7 @@ type Postgres struct {
 }
 
 // DSN builds a Postgres connection string from the settings.
-func (p Postgres) DSN() string {
+func (p *Postgres) DSN() string {
 	u := url.URL{
 		Scheme:   "postgres",
 		User:     url.UserPassword(p.User, p.Password),

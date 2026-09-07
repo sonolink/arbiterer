@@ -72,7 +72,6 @@ func (s *Server) Run() error {
 	case err := <-errCh:
 		return err
 	case <-quitCh:
-
 	}
 
 	ctx, cancel := context.WithTimeout(

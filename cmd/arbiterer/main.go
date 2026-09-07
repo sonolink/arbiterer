@@ -27,9 +27,15 @@ func main() {
 
 	switch os.Args[1] {
 	case "migrate":
-		runMigrate()
+		if err := runMigrate(); err != nil {
+			slog.Error("migrate failed", "error", err)
+			os.Exit(1)
+		}
 	case "serve":
-		runServe()
+		if err := runServe(); err != nil {
+			slog.Error("server failed", "error", err)
+			os.Exit(1)
+		}
 	default:
 		fmt.Fprintf(os.Stderr, "arbiterer: unknown command %q\n\n", os.Args[1])
 		printUsage()
@@ -45,43 +51,39 @@ commands:
 	os.Exit(2)
 }
 
-func runMigrate() {
+func runMigrate() error {
 	ctx := context.Background()
 
 	pg, err := config.LoadPostgres()
 	if err != nil {
-		slog.Error("loading configuration", "error", err)
-		os.Exit(1)
+		return fmt.Errorf("loading configuration: %w", err)
 	}
 
 	store, err := storage.NewStore(ctx, pg.DSN())
 	if err != nil {
-		slog.Error("connecting to postgres", "error", err)
-		os.Exit(1)
+		return fmt.Errorf("connecting to postgres: %w", err)
 	}
 	defer store.Close()
 
 	if err := store.Migrate(ctx); err != nil {
-		slog.Error("applying migrations", "error", err)
-		os.Exit(1)
+		return fmt.Errorf("applying migrations: %w", err)
 	}
 
 	slog.Info("migrations applied")
+	return nil
 }
 
-func runServe() {
+func runServe() error {
 	ctx := context.Background()
 
 	cfg, err := config.Load()
 	if err != nil {
-		slog.Error("loading configuration", "error", err)
-		os.Exit(1)
+		return fmt.Errorf("loading configuration: %w", err)
 	}
 
 	store, err := storage.NewStore(ctx, cfg.Postgres.DSN())
 	if err != nil {
-		slog.Error("connecting to postgres", "error", err)
-		os.Exit(1)
+		return fmt.Errorf("connecting to postgres: %w", err)
 	}
 	defer store.Close()
 
@@ -94,7 +96,8 @@ func runServe() {
 		discordClient,
 	)
 	if err := srv.Run(); err != nil {
-		slog.Error("running the server", "error", err)
-		os.Exit(1)
+		return fmt.Errorf("running the server: %w", err)
 	}
+
+	return nil
 }
