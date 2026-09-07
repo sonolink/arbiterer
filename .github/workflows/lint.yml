@@ -12,7 +12,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     if: |
-      github.event_name == 'workflow_dispatch' ||
       (github.event.pull_request.head.repo.full_name == github.repository &&
       format('{0}', github.event.pull_request.user.id) != vars.RENOVATE_BOT_ID)
     permissions:
@@ -61,7 +60,6 @@ jobs:
     timeout-minutes: 15
     if: |
       github.event_name == 'pull_request' &&
-      github.event.pull_request.head.repo.full_name != github.repository &&
       format('{0}', github.event.pull_request.user.id) != vars.RENOVATE_BOT_ID
     steps:
       - name: Checkout
@@ -76,9 +74,9 @@ jobs:
           cache: true
 
       - name: Run golangci-lint
-        uses: golangci/golangci-lint-action@4696ba8babb6127d732c3c6dde519db15edab9d # v8
+        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9
         with:
-          version: latest
+          version: v2.13.2
 
   build:
     name: Build
