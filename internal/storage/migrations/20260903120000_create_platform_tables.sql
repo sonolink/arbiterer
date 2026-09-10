@@ -34,7 +34,7 @@ CREATE TABLE discord_users (
 
 CREATE TABLE communities (
   id UUID PRIMARY KEY DEFAULT UUIDV7(),
-  installation_id BIGINT NOT NULL UNIQUE,
+  installation_account_id BIGINT NOT NULL UNIQUE,
   created_at TIMESTAMPTZ GENERATED ALWAYS AS (uuid_extract_timestamp(id)) STORED
 );
 
