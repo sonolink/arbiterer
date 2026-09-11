@@ -7,8 +7,6 @@ CREATE TABLE pending_registrations (
   id UUID PRIMARY KEY DEFAULT UUIDV7(),
   state_token TEXT COLLATE "C" NOT NULL UNIQUE,
   github_user_id TEXT COLLATE "C" NOT NULL,
-  repository_id BIGINT NOT NULL,
-  pr_number INT NOT NULL,
   expires_at TIMESTAMPTZ NOT NULL,
   used_at TIMESTAMPTZ
 );
