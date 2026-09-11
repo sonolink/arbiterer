@@ -17,12 +17,6 @@ CREATE INDEX idx_pending_registrations_cleanup
   ON pending_registrations (expires_at)
   WHERE used_at IS NULL;
 
-CREATE TABLE github_users (
-  id UUID PRIMARY KEY DEFAULT UUIDV7(),
-  github_user_id TEXT COLLATE "C" NOT NULL UNIQUE,
-  created_at TIMESTAMPTZ GENERATED ALWAYS AS (uuid_extract_timestamp(id)) STORED
-);
-
 CREATE TABLE discord_users (
   id UUID PRIMARY KEY DEFAULT UUIDV7(),
   discord_user_id TEXT COLLATE "C" NOT NULL UNIQUE,
@@ -34,7 +28,7 @@ CREATE TABLE discord_users (
 
 CREATE TABLE connections_discord (
   id UUID PRIMARY KEY DEFAULT UUIDV7(),
-  github_user_id UUID NOT NULL REFERENCES github_users(id),
+  github_user_id TEXT COLLATE "C" NOT NULL,
   discord_user_id UUID NOT NULL REFERENCES discord_users(id),
   repository_id BIGINT NOT NULL,
   created_at TIMESTAMPTZ GENERATED ALWAYS AS (uuid_extract_timestamp(id)) STORED,
@@ -44,5 +38,4 @@ CREATE TABLE connections_discord (
 -- +goose Down
 DROP TABLE IF EXISTS connections_discord;
 DROP TABLE IF EXISTS discord_users;
-DROP TABLE IF EXISTS github_users;
 DROP TABLE IF EXISTS pending_registrations;
