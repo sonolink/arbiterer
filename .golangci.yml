@@ -1,0 +1,112 @@
+version: "2"
+
+run:
+  timeout: 5m
+
+linters:
+  default: none
+  enable:
+    - errcheck              # Unchecked error return values (deferred Close(), etc.).
+    - govet                 # Standard vet checks (printf verbs, copylocks, loop closures, ...).
+    - ineffassign           # Assignments that have no effect on the rest of the code.
+    - staticcheck           # Broad SA* analysis (bugs, performance, style, ...).
+    - unused                # Unused functions, types, and variables.
+
+    - bodyclose             # HTTP response bodies must be closed (Discord client).
+    - copyloopvar           # Loop variables captured before the range-var reuse change.
+    - errchkjson            # JSON decoding is central to the Discord API client.
+    - errorlint             # fmt.Errorf / errors wrapping discipline.
+    - gosec                 # Security audit (HTTP timeouts, body size limits).
+    - noctx                 # HTTP requests must carry a context.
+
+    - asciicheck            # Identifiers should stay ASCII-only.
+    - bidichk               # No unwanted Unicode bidi control characters.
+    - goconst               # Repeated string literals (e.g. "discord:" error prefixes).
+    - gocritic              # High-value generic checks (exitAfterDefer, singleCaseSwitch, ...).
+    - gocyclo               # Cyclomatic complexity cap (see settings).
+    - godot                 # Comments must end in a period.
+    - godox                 # No lingering TODO/FIXME/HACK markers.
+    - misspell              # US-spelling typos in comments and identifiers.
+    - nolintlint            # Any //nolint must be specific and explained.
+    - revive                # Doc comments and idiomatic Go (the exported rule).
+    - unconvert             # Redundant type conversions.
+    - unparam               # Unused or always-constant function parameters.
+    - whitespace            # Leading/trailing whitespace in code lines.
+  settings:
+    goconst:
+      min-len: 3
+      min-occurrences: 3
+    gocritic:
+      enabled-tags:
+        - diagnostic
+        - performance
+        - style
+        - opinionated
+      disabled-checks:
+        - dupImport
+        - hugeParam
+        - ifElseChain
+        - octalLiteral
+        - whyNoLint
+    gocyclo:
+      min-complexity: 15
+    godox:
+      keywords:
+        - TODO
+        - FIXME
+        - HACK
+    govet:
+      enable-all: true
+      disable:
+        - fieldalignment
+        - shadow
+    misspell:
+      locale: US
+    nolintlint:
+      allow-unused: false
+      require-explanation: true
+      require-specific: true
+    revive:
+      rules:
+        - name: blank-imports
+        - name: context-as-argument
+        - name: context-keys-type
+        - name: dot-imports
+        - name: error-return
+        - name: error-strings
+        - name: error-naming
+        - name: exported
+        - name: if-return
+        - name: increment-decrement
+        - name: var-naming
+        - name: var-declaration
+        - name: range
+        - name: receiver-naming
+        - name: time-naming
+        - name: unexported-return
+        - name: indent-error-flow
+        - name: errorf
+        - name: superfluous-else
+        - name: unreachable-code
+        - name: redefines-builtin-id
+  exclusions:
+    # Never lint generated code.
+    generated: strict
+    rules:
+      # errcheck: benign functions whose return values are conventionally ignored.
+      - linters:
+          - errcheck
+        text: "Error return value of .((os\\.)?std(out|err)\\..*|.*Close|.*Flush|os\\.Remove(All)?|.*print(f|ln)?|os\\.(Un)?Setenv). is not checked"
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  exclusions:
+    # Never format generated code.
+    generated: strict
+
+issues:
+  # Do not cap the number of reported issues per linter or per message.
+  max-issues-per-linter: 0
+  max-same-issues: 0

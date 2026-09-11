@@ -22,7 +22,7 @@ type Token struct {
 // AuthorizeURL builds the Discord consent page URL for the given state and scopes.
 func (c *Client) AuthorizeURL(state string, scopes ...string) (string, error) {
 	if len(scopes) == 0 {
-		return "", fmt.Errorf("discord: at least one scope is required.")
+		return "", fmt.Errorf("discord: at least one scope is required")
 	}
 
 	q := url.Values{
