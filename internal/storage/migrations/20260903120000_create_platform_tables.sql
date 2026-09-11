@@ -26,7 +26,7 @@ CREATE TABLE discord_users (
   created_at TIMESTAMPTZ GENERATED ALWAYS AS (uuid_extract_timestamp(id)) STORED
 );
 
-CREATE TABLE connections_discord (
+CREATE TABLE github_discord_connections (
   id UUID PRIMARY KEY DEFAULT UUIDV7(),
   github_user_id TEXT COLLATE "C" NOT NULL,
   discord_user_id UUID NOT NULL REFERENCES discord_users(id),
