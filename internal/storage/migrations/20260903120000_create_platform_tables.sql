@@ -32,31 +32,17 @@ CREATE TABLE discord_users (
   created_at TIMESTAMPTZ GENERATED ALWAYS AS (uuid_extract_timestamp(id)) STORED
 );
 
-CREATE TABLE communities (
-  id UUID PRIMARY KEY DEFAULT UUIDV7(),
-  installation_account_id BIGINT NOT NULL UNIQUE,
-  created_at TIMESTAMPTZ GENERATED ALWAYS AS (uuid_extract_timestamp(id)) STORED
-);
-
-CREATE TABLE repositories (
-  repository_id BIGINT PRIMARY KEY,
-  community_id UUID NOT NULL REFERENCES communities(id) ON DELETE CASCADE,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
 CREATE TABLE connections_discord (
   id UUID PRIMARY KEY DEFAULT UUIDV7(),
   github_user_id UUID NOT NULL REFERENCES github_users(id),
   discord_user_id UUID NOT NULL REFERENCES discord_users(id),
-  community_id UUID NOT NULL REFERENCES communities(id) ON DELETE CASCADE,
+  repository_id BIGINT NOT NULL,
   created_at TIMESTAMPTZ GENERATED ALWAYS AS (uuid_extract_timestamp(id)) STORED,
-  UNIQUE (github_user_id, community_id)
+  UNIQUE (github_user_id, repository_id)
 );
 
 -- +goose Down
 DROP TABLE IF EXISTS connections_discord;
-DROP TABLE IF EXISTS repositories;
-DROP TABLE IF EXISTS communities;
 DROP TABLE IF EXISTS discord_users;
 DROP TABLE IF EXISTS github_users;
 DROP TABLE IF EXISTS pending_registrations;
