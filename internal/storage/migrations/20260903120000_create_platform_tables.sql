@@ -23,7 +23,7 @@ CREATE TABLE discord_users (
   access_token TEXT NOT NULL,
   refresh_token TEXT NOT NULL,
   token_expires_at TIMESTAMPTZ NOT NULL,
-  created_at TIMESTAMPTZ GENERATED ALWAYS AS (uuid_extract_timestamp(id)) STORED
+  created_at TIMESTAMPTZ GENERATED ALWAYS AS (uuid_extract_timestamp(id)) VIRTUAL
 );
 
 CREATE TABLE github_discord_connections (
@@ -31,7 +31,7 @@ CREATE TABLE github_discord_connections (
   github_user_id TEXT COLLATE "C" NOT NULL,
   discord_user_id UUID NOT NULL REFERENCES discord_users(id),
   repository_id BIGINT NOT NULL,
-  created_at TIMESTAMPTZ GENERATED ALWAYS AS (uuid_extract_timestamp(id)) STORED,
+  created_at TIMESTAMPTZ GENERATED ALWAYS AS (uuid_extract_timestamp(id)) VIRTUAL,
   UNIQUE (github_user_id, repository_id)
 );
 
