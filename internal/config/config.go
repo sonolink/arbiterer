@@ -40,7 +40,7 @@ const (
 	LogFormatJSON LogFormat = "json"
 )
 
-// UnmarshalText accepts either the text or the json log format.
+// UnmarshalText parses text or the json log format.
 func (f *LogFormat) UnmarshalText(text []byte) error {
 	switch format := LogFormat(text); format {
 	case LogFormatText, LogFormatJSON:
