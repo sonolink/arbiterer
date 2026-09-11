@@ -1,8 +1,4 @@
 -- +goose Up
-DROP TABLE IF EXISTS links;
-DROP TYPE IF EXISTS community;
-DROP TYPE IF EXISTS forge;
-
 CREATE TABLE pending_registrations (
   id UUID PRIMARY KEY DEFAULT UUIDV7(),
   state_token TEXT COLLATE "C" NOT NULL UNIQUE,
