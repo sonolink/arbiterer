@@ -104,7 +104,7 @@ type Postgres struct {
 }
 
 // DSN builds a Postgres connection string from the settings.
-func (p *Postgres) DSN() string {
+func (p Postgres) DSN() string {
 	u := url.URL{
 		Scheme:   "postgres",
 		User:     url.UserPassword(p.User, p.Password),

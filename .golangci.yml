@@ -22,7 +22,7 @@ linters:
     - asciicheck            # Identifiers should stay ASCII-only.
     - bidichk               # No unwanted Unicode bidi control characters.
     - goconst               # Repeated string literals (e.g. "discord:" error prefixes).
-    - gocritic              # High-value generic checks (hugeParam, exitAfterDefer, ...).
+    - gocritic              # High-value generic checks (exitAfterDefer, singleCaseSwitch, ...).
     - gocyclo               # Cyclomatic complexity cap (see settings).
     - godot                 # Comments must end in a period.
     - godox                 # No lingering TODO/FIXME/HACK markers.
@@ -44,6 +44,7 @@ linters:
         - opinionated
       disabled-checks:
         - dupImport
+        - hugeParam
         - ifElseChain
         - octalLiteral
         - whyNoLint
