@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/base64"
 	"fmt"
 	"io"
 	"log/slog"
@@ -16,6 +17,7 @@ import (
 type Config struct {
 	Log      Log
 	Discord  Discord
+	Crypto   Crypto
 	Postgres Postgres
 	Server   Server
 }
@@ -138,4 +140,31 @@ func LoadPostgres() (Postgres, error) {
 	}
 
 	return cfg, nil
+}
+
+// keySize is the required length in bytes of a Key.
+const keySize = 32
+
+// Key is a 32 byte secret, decoded from a base64 encoded environment value.
+type Key []byte
+
+// UnmarshalText decodes a base64 encoded key and rejects it unless it is keySize bytes long.
+func (k *Key) UnmarshalText(text []byte) error {
+	key, err := base64.StdEncoding.DecodeString(string(text))
+	if err != nil {
+		return fmt.Errorf("invalid base64: %w", err)
+	}
+
+	if len(key) != keySize {
+		return fmt.Errorf("key must be %d bytes, got %d", keySize, len(key))
+	}
+
+	*k = key
+
+	return nil
+}
+
+// Crypto holds the keys used to encrypt secrets at rest.
+type Crypto struct {
+	TokenKey Key `env:"TOKEN_ENCRYPTION_KEY,required"`
 }
