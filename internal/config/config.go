@@ -17,9 +17,10 @@ import (
 type Config struct {
 	Log      Log
 	Discord  Discord
-	Crypto   Crypto
 	Postgres Postgres
 	Server   Server
+	Crypto   Crypto
+	GitHub   GitHub
 }
 
 // Load reads the full configuration from environment variables.
@@ -125,6 +126,7 @@ type Server struct {
 	WriteTimeout    time.Duration `env:"SERVER_WRITE_TIMEOUT"    envDefault:"30s"`
 	IdleTimeout     time.Duration `env:"SERVER_IDLE_TIMEOUT"     envDefault:"120s"`
 	ShutdownTimeout time.Duration `env:"SERVER_SHUTDOWN_TIMEOUT" envDefault:"10s"`
+	PublicURL       string        `env:"SERVER_PUBLIC_URL,required"`
 }
 
 // Addr combines host and port into a listener address.
@@ -167,4 +169,9 @@ func (k *Key) UnmarshalText(text []byte) error {
 // Crypto holds the keys used to encrypt secrets at rest.
 type Crypto struct {
 	TokenKey Key `env:"TOKEN_ENCRYPTION_KEY,required"`
+}
+
+// GitHub holds the settings used to verify Actions OIDC tokens.
+type GitHub struct {
+	OIDCAudience string `env:"GITHUB_OIDC_AUDIENCE,required"`
 }

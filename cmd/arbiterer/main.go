@@ -8,6 +8,8 @@ import (
 
 	"github.com/sonolink/arbiterer/internal/config"
 	"github.com/sonolink/arbiterer/internal/discord"
+	"github.com/sonolink/arbiterer/internal/github"
+	"github.com/sonolink/arbiterer/internal/secrets"
 	"github.com/sonolink/arbiterer/internal/server"
 	"github.com/sonolink/arbiterer/internal/storage"
 )
@@ -89,11 +91,20 @@ func runServe() error {
 
 	discordClient := discord.NewClient(cfg.Discord)
 
+	sealer, err := secrets.NewSealer(cfg.Crypto.TokenKey)
+	if err != nil {
+		return fmt.Errorf("creating sealer: %w", err)
+	}
+
+	verifier := github.NewVerifier(ctx, cfg.GitHub)
+
 	srv := server.New(
 		cfg.Server,
 		slog.Default(),
 		store,
 		discordClient,
+		sealer,
+		verifier,
 	)
 	if err := srv.Run(); err != nil {
 		return fmt.Errorf("running the server: %w", err)
