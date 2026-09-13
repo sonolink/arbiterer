@@ -27,6 +27,6 @@ CREATE TABLE github_discord_connections (
 );
 
 -- +goose Down
-DROP TABLE IF EXISTS github_discord_connections;
-DROP TABLE IF EXISTS discord_users;
-DROP TABLE IF EXISTS pending_registrations;
+DROP TABLE IF EXISTS github_discord_connections CASCADE;
+DROP TABLE IF EXISTS discord_users CASCADE;
+DROP TABLE IF EXISTS pending_registrations CASCADE;
