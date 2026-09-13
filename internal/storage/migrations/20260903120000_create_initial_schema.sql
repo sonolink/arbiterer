@@ -7,7 +7,7 @@ CREATE TABLE pending_registrations (
   expires_at TIMESTAMPTZ NOT NULL
 );
 
-CREATE INDEX idx_pending_registrations_cleanup
+CREATE INDEX idx_pending_registrations_expires_at
   ON pending_registrations (expires_at);
 
 CREATE TABLE discord_users (
