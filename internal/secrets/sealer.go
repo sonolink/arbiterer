@@ -6,18 +6,16 @@ import (
 	"crypto/rand"
 	"errors"
 	"fmt"
-
-	"github.com/sonolink/arbiterer/internal/config"
 )
 
-// Sealer encrypts and decrypts secrets with AES-256-GCM.
+// Sealer encrypts and decrypts secrets with AES-GCM.
 type Sealer struct {
 	aead cipher.AEAD
 }
 
-// NewSealer builds a Sealer from the configured encryption key.
-func NewSealer(cfg config.Crypto) (*Sealer, error) {
-	block, err := aes.NewCipher(cfg.TokenKey)
+// NewSealer builds a Sealer from the given key.
+func NewSealer(key []byte) (*Sealer, error) {
+	block, err := aes.NewCipher(key)
 	if err != nil {
 		return nil, fmt.Errorf("secrets: creating cipher: %w", err)
 	}
