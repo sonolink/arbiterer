@@ -63,9 +63,23 @@ func tokenAAD(discordUserID int64, field string) []byte {
 // used, so the user has to authorize again.
 var errReauthRequired = errors.New("server: discord grant is no longer usable")
 
-// refreshSkew is how early a token is treated as expired, absorbing clock differences and
-// the round trip to Discord.
-const refreshSkew = time.Minute
+const (
+	// refreshSkew is how early a token is treated as expired, absorbing clock differences and
+	// the round trip to Discord.
+	refreshSkew = time.Minute
+
+	// tokenStoreTimeout bounds the write that persists refreshed tokens, which
+	// must outlive the request that triggered it.
+	tokenStoreTimeout = 5 * time.Second
+
+	// tokenStoreAttempts is how many times a refreshed token is stored before the
+	// grant is treated as lost.
+	tokenStoreAttempts = 3
+
+	// tokenStoreBackoff is the wait after the first failed store, doubling with
+	// each further attempt.
+	tokenStoreBackoff = 50 * time.Millisecond
+)
 
 func (s *Server) accessToken(ctx context.Context, user *storage.DiscordUser) (string, error) {
 	if time.Until(user.TokenExpiresAt) > refreshSkew {
@@ -121,11 +135,58 @@ func (s *Server) accessToken(ctx context.Context, user *storage.DiscordUser) (st
 	user.EncryptedRefreshToken = sealedRefreshToken
 	user.TokenExpiresAt = token.ExpiresAt
 
-	if err := s.store.UpdateDiscordUserTokens(ctx, user); err != nil {
-		return "", fmt.Errorf("storing refreshed tokens: %w", err)
+	// Discord has already invalidated the old refresh token, so this write has to outlive
+	// the request that triggered it.
+	storeCtx, cancel := context.WithTimeout(
+		context.WithoutCancel(ctx),
+		tokenStoreTimeout,
+	)
+	defer cancel()
+
+	if err := s.storeRefreshedTokens(storeCtx, user); err != nil {
+		return "", err
 	}
 
 	return token.AccessToken, nil
+}
+
+// storeRefreshedTokens persists refreshed credentials, retrying transient
+// failures. Losing this write costs the user their grant, since Discord has
+// already invalidated the token it replaced.
+func (s *Server) storeRefreshedTokens(ctx context.Context, user *storage.DiscordUser) error {
+	var err error
+
+	backoff := tokenStoreBackoff
+
+loop:
+	for attempt := 1; attempt <= tokenStoreAttempts; attempt++ {
+		err = s.store.UpdateDiscordUserTokens(ctx, user)
+		if err == nil {
+			return nil
+		}
+
+		if errors.Is(err, storage.ErrNotFound) {
+			break
+		}
+
+		if attempt < tokenStoreAttempts {
+			select {
+			case <-ctx.Done():
+				err = ctx.Err()
+				break loop
+			case <-time.After(backoff):
+				backoff *= 2
+			}
+		}
+	}
+
+	s.logger.Error(
+		"lost refreshed discord tokens",
+		"discord_user_id", user.ID,
+		"error", err,
+	)
+
+	return fmt.Errorf("storing refreshed tokens: %w", err)
 }
 
 func (s *Server) resolveMember(
