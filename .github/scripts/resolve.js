@@ -11,8 +11,26 @@ if (!audience || !serverUrl) {
 // posting a new one every time. Never shown to the user (HTML comments don't render)
 const COMMENT_MARKER = "<!-- arbiterer-setup-message -->";
 
-function getCommentPerStatus(status, setupUrl, author) {
+/**
+ * Generates a comment based on the status of the Discord account link.
+ * @param {number} status
+ * @param {string} setupUrl 
+ * @param {string} author 
+ * @param {string|null} guildId 
+ * @returns 
+ */
+function getCommentPerStatus(status, setupUrl, author, guildId = null) {
+  var linkedBase = 'Your GitHub account is linked to your Discord account';
+  if (guildId) {
+    linkedBase += ' and you are also a member of the required server.';
+  } else {
+    linkedBase += '.';
+  }
+
+  linkedBase += ' No further action is needed.';
+
   const messages = {
+    linked: linkedBase,
     unlinked: `Please [link your Discord account](${setupUrl}) to your GitHub account.`,
     revoked: `Your Discord account link has expired or was revoked. Please [re-link your account](${setupUrl}).`,
     not_a_member: 'Your GitHub account is linked, but you are not in the required Discord server. Please join the server.',
@@ -55,10 +73,24 @@ module.exports = async function resolve({ core, context, github }) {
     }),
     signal: AbortSignal.timeout(30000),
   });
+
   if (!response.ok) {
-    throw new Error(`Arbiterer resolve failed with HTTP ${response.status}.`);
+    let detail;
+    if (response.headers.get('content-type')?.includes('application/problem+json')) {
+      const problem = await response.json().catch(() => null);
+      detail = problem?.detail ?? problem?.title;
+    }
+    throw new Error(
+      detail
+        ? `Arbiterer resolve failed with HTTP ${response.status}: ${detail}`
+        : `Arbiterer resolve failed with HTTP ${response.status}.`,
+    );
   }
-  const result = await response.json();
+
+  const result = await response.json().catch(() => {
+    throw new Error('Arbiterer returned an invalid JSON response.');
+  });
+
   if (typeof result.status !== 'string' || !result.status) {
     throw new Error('Arbiterer returned an invalid status.');
   }
@@ -72,7 +104,7 @@ module.exports = async function resolve({ core, context, github }) {
   if (status === 'linked' || !issueNumber) return;
 
   const author = `@${context.payload.pull_request.user.login}`;
-  const commentBody = getCommentPerStatus(status, setupUrl, author);
+  const commentBody = getCommentPerStatus(status, setupUrl, author, guildId);
 
   const existingComment = await findMarkedComment(
     github,
@@ -92,6 +124,6 @@ module.exports = async function resolve({ core, context, github }) {
   await github.rest.issues.createComment({
     ...context.repo,
     issue_number: issueNumber,
-    body: `${author}, ${body}`,
+    body: commentBody,
   });
 }
