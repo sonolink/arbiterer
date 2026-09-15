@@ -1,7 +1,10 @@
 package config
 
 import (
+	"crypto/rsa"
+	"crypto/x509"
 	"encoding/base64"
+	"encoding/pem"
 	"fmt"
 	"io"
 	"log/slog"
@@ -166,12 +169,51 @@ func (k *Key) UnmarshalText(text []byte) error {
 	return nil
 }
 
+// RSAPrivateKey is an RSA private key, decoded from a base64 encoded PEM
+// block in an environment value.
+type RSAPrivateKey rsa.PrivateKey
+
+// UnmarshalText decodes a base64 encoded PEM block and parses the RSA
+// private key it contains.
+func (k *RSAPrivateKey) UnmarshalText(text []byte) error {
+	pemBytes, err := base64.StdEncoding.DecodeString(string(text))
+	if err != nil {
+		return fmt.Errorf("invalid base64: %w", err)
+	}
+
+	block, _ := pem.Decode(pemBytes)
+	if block == nil {
+		return fmt.Errorf("no PEM block found")
+	}
+
+	if key, err := x509.ParsePKCS1PrivateKey(block.Bytes); err == nil {
+		*k = RSAPrivateKey(*key)
+		return nil
+	}
+
+	parsed, err := x509.ParsePKCS8PrivateKey(block.Bytes)
+	if err != nil {
+		return fmt.Errorf("parsing private key: %w", err)
+	}
+
+	key, ok := parsed.(*rsa.PrivateKey)
+	if !ok {
+		return fmt.Errorf("private key is not RSA")
+	}
+
+	*k = RSAPrivateKey(*key)
+
+	return nil
+}
+
 // Crypto holds the keys used to encrypt secrets at rest.
 type Crypto struct {
 	TokenKey Key `env:"TOKEN_ENCRYPTION_KEY,required"`
 }
 
-// GitHub holds the settings used to verify Actions OIDC tokens.
+// GitHub holds the settings used to verify OIDC tokens and authenticate as a GitHub App.
 type GitHub struct {
-	OIDCAudience string `env:"GITHUB_OIDC_AUDIENCE,required"`
+	OIDCAudience string        `env:"GITHUB_OIDC_AUDIENCE,required"`
+	ClientID     string        `env:"GITHUB_APP_CLIENT_ID,required"`
+	PrivateKey   RSAPrivateKey `env:"GITHUB_APP_PRIVATE_KEY,required"`
 }
