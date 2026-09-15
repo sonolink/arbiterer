@@ -1,8 +1,23 @@
+const { findMarkedComment } = require('./utils')
+
 const audience = process.env.ARBITERER_OIDC_AUDIENCE?.trim();
 const serverUrl = process.env.ARBITERER_SERVER_URL?.trim();
 
 if (!audience || !serverUrl) {
   throw new Error('The action maintainer must configure the OIDC audience and server URL in the environment variables.');
+}
+
+// Hidden in the comment body so later runs can find and edit it instead of
+// posting a new one every time. Never shown to the user (HTML comments don't render)
+const COMMENT_MARKER = "<!-- arbiterer-setup-message -->";
+
+function getCommentPerStatus(status, setupUrl, author) {
+  const messages = {
+    unlinked: `Please [link your Discord account](${setupUrl}) to your GitHub account.`,
+    revoked: `Your Discord account link has expired or was revoked. Please [re-link your account](${setupUrl}).`,
+    not_a_member: 'Your GitHub account is linked, but you are not in the required Discord server. Please join the server.',
+  };
+  return `${COMMENT_MARKER}\n\n${author}, ${messages[status] ?? `Unable to confirm your Discord account link. Status: ${status}`}`;
 }
 
 /**
@@ -23,7 +38,7 @@ module.exports = async function resolve({ core, context, github }) {
     throw new Error('Cannot determine the GitHub user ID from the workflow event.');
   }
 
-  const endpoint = new URL(`${serverUrl.replace(/\/$/, '')}/v1/resolve`);
+  const endpoint = new URL(`${serverUrl.replace(/\/$/, '')}/resolve`);
 
   const oidcToken = await core.getIDToken(audience);
 
@@ -57,12 +72,23 @@ module.exports = async function resolve({ core, context, github }) {
   if (status === 'linked' || !issueNumber) return;
 
   const author = `@${context.payload.pull_request.user.login}`;
-  const messages = {
-    unlinked: `Please [link your Discord account](${setupUrl}) to your GitHub account.`,
-    revoked: `Your Discord account link has expired or was revoked. Please [re-link your account](${setupUrl}).`,
-    not_a_member: 'Your GitHub account is linked, but you are not in the required Discord server. Please join the server.',
-  };
-  const body = `${messages[status] ?? `Unable to confirm your Discord account link. Status: ${status}`}`;
+  const commentBody = getCommentPerStatus(status, setupUrl, author);
+
+  const existingComment = await findMarkedComment(
+    github,
+    { ...context.repo, issue_number: issueNumber },
+    COMMENT_MARKER,
+  );
+
+  if (existingComment) {
+    await github.rest.issues.updateComment({
+      ...context.repo,
+      comment_id: existingComment.id,
+      body: commentBody,
+    });
+    return;
+  }
+
   await github.rest.issues.createComment({
     ...context.repo,
     issue_number: issueNumber,
