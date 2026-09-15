@@ -23,11 +23,11 @@ runs:
       uses: actions/github-script@v7
       env:
         ARBITERER_ACTION_PATH: ${{ github.action_path }}
-        ARBITERER_SERVER_URL: "https://arbiterer.com/api/v1"
+        ARBITERER_SERVER_URL: "https://api.arbiterer.com/v1"
         ARBITERER_OIDC_AUDIENCE: "https://arbiterer.com"
 
       with:
         script: |
           const path = require('path');
-          const resolve = require(path.join(process.env.ARBITERER_ACTION_PATH, 'scripts', 'resolve.js'));
+          const resolve = require(path.join(process.env.ARBITERER_ACTION_PATH, '.github', 'scripts', 'resolve.js'));
           await resolve({ core, context, github });
