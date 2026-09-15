@@ -97,6 +97,7 @@ func runServe() error {
 	}
 
 	verifier := github.NewVerifier(ctx, cfg.GitHub)
+	githubApp := github.NewAppClient(cfg.GitHub)
 
 	srv := server.New(
 		cfg.Server,
@@ -105,6 +106,7 @@ func runServe() error {
 		discordClient,
 		sealer,
 		verifier,
+		githubApp,
 	)
 	if err := srv.Run(); err != nil {
 		return fmt.Errorf("running the server: %w", err)

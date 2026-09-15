@@ -24,6 +24,7 @@ type Server struct {
 	discordClient *discord.Client
 	sealer        *secrets.Sealer
 	verifier      *github.Verifier
+	githubApp     *github.AppClient
 }
 
 // New builds a Server from its configuration and dependencies.
@@ -34,6 +35,7 @@ func New(
 	discordClient *discord.Client,
 	sealer *secrets.Sealer,
 	verifier *github.Verifier,
+	githubApp *github.AppClient,
 ) *Server {
 	return &Server{
 		cfg:           cfg,
@@ -42,6 +44,7 @@ func New(
 		discordClient: discordClient,
 		sealer:        sealer,
 		verifier:      verifier,
+		githubApp:     githubApp,
 	}
 }
 
