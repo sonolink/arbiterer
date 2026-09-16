@@ -1,15 +1,4 @@
 -- +goose Up
-CREATE TABLE pending_registrations (
-  id UUID PRIMARY KEY DEFAULT UUIDV7(),
-  state_token TEXT COLLATE "C" NOT NULL UNIQUE,
-  github_user_id TEXT COLLATE "C" NOT NULL,
-  repository_id BIGINT NOT NULL,
-  expires_at TIMESTAMPTZ NOT NULL
-);
-
-CREATE INDEX idx_pending_registrations_expires_at
-  ON pending_registrations (expires_at);
-
 CREATE TABLE discord_users (
   id BIGINT PRIMARY KEY,
   encrypted_access_token BYTEA NOT NULL,
@@ -29,4 +18,3 @@ CREATE TABLE github_discord_connections (
 -- +goose Down
 DROP TABLE IF EXISTS github_discord_connections CASCADE;
 DROP TABLE IF EXISTS discord_users CASCADE;
-DROP TABLE IF EXISTS pending_registrations CASCADE;
