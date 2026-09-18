@@ -168,10 +168,14 @@ func (k *Key) UnmarshalText(text []byte) error {
 
 // Crypto holds the keys used to encrypt secrets at rest.
 type Crypto struct {
-	TokenKey Key `env:"TOKEN_ENCRYPTION_KEY,required"`
+	TokenKey  Key `env:"TOKEN_ENCRYPTION_KEY,required"`
+	CookieKey Key `env:"COOKIE_SIGNING_KEY,required"`
 }
 
-// GitHub holds the settings used to verify Actions OIDC tokens.
+// GitHub holds the application settings used for OAuth and OIDC.
 type GitHub struct {
+	ClientID     string `env:"GITHUB_CLIENT_ID,required"`
+	ClientSecret string `env:"GITHUB_CLIENT_SECRET,required"`
+	RedirectURI  string `env:"GITHUB_REDIRECT_URI,required"`
 	OIDCAudience string `env:"GITHUB_OIDC_AUDIENCE,required"`
 }
