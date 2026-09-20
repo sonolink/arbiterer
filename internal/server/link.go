@@ -139,19 +139,19 @@ func (s *Server) setLinkCookie(w http.ResponseWriter, value string) {
 		Path:     "/link",
 		MaxAge:   int(s.cfg.LinkCookieLifetime.Seconds()),
 		HttpOnly: true,
-		Secure:   true, 
+		Secure:   true,
 		SameSite: http.SameSiteLaxMode,
 	})
 }
 
 func (s *Server) clearLinkCookie(w http.ResponseWriter) {
 	http.SetCookie(w, &http.Cookie{
-		Name: linkCookieName,
-		Value: "",
-		Path: "/link",
-		MaxAge: -1,
+		Name:     linkCookieName,
+		Value:    "",
+		Path:     "/link",
+		MaxAge:   -1,
 		HttpOnly: true,
-		Secure: true, // should be false for localhost in development
+		Secure:   true, // should be false for localhost in development
 		SameSite: http.SameSiteLaxMode,
 	})
 }
