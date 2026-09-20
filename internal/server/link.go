@@ -157,22 +157,31 @@ func (s *Server) clearLinkCookie(w http.ResponseWriter) {
 }
 
 // --- GET /link?token=... ---
+
+func (s *Server) rejectLink(w http.ResponseWriter, r *http.Request, expired bool) {
+	detail := "This link is invalid or has expired. Please re-run the check to generate a fresh one."
+	if expired {
+		detail = "This link has expired. Please re-run the check to get a fresh one."
+	}
+	s.writeProblem(w, r, http.StatusBadRequest, detail)
+}
+
 func (s *Server) handleLink(w http.ResponseWriter, r *http.Request) {
 	encoded := r.URL.Query().Get("token")
 	if encoded == "" {
-		s.writeProblem(w, r, http.StatusBadRequest, "This link is invalid or has expired. Please re-run the check to generate a fresh one.")
+		s.rejectLink(w, r, false)
 		return
 	}
 
 	_, err := s.openLinkToken(encoded)
 	if errors.Is(err, errLinkExpired) {
-		s.writeProblem(w, r, http.StatusBadRequest, "This link has expired. Please re-run the check to get a fresh one.")
+		s.rejectLink(w, r, true)
 		return
 	}
 
 	if err != nil {
 		s.logger.Warn("rejecting link token", "error", err)
-		s.writeProblem(w, r, http.StatusBadRequest, "This link is invalid or has expired. Please re-run the check to generate a fresh one.")
+		s.rejectLink(w, r, false)
 		return
 	}
 
