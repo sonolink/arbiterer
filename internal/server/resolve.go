@@ -35,17 +35,22 @@ type resolveResponse struct {
 	SetupURL string          `json:"setup_url,omitempty"`
 }
 
-// setupURL builds the link a contributor follows to connect their accounts for
-// the given repository.
-func setupURL(publicURL string, repositoryID int64) string {
+// setupURL builds the link a contributor follows to connect their accounts,
+// carrying a sealed, short-lived bearer token.
+func (s *Server) setupURL(githubUserID string, repositoryID int64) (string, error) {
+	token, err := s.sealLinkToken(githubUserID, repositoryID)
+	if err != nil {
+		return "", fmt.Errorf("building setup url: %w", err)
+	}
+
 	u := url.URL{
 		Path: "/link",
 		RawQuery: url.Values{
-			"repository_id": {strconv.FormatInt(repositoryID, 10)},
+			"token": {token},
 		}.Encode(),
 	}
 
-	return strings.TrimSuffix(publicURL, "/") + u.RequestURI()
+	return strings.TrimSuffix(s.cfg.PublicURL, "/") + u.RequestURI(), nil
 }
 
 const (
@@ -193,17 +198,13 @@ func (s *Server) resolveMember(
 	ctx context.Context,
 	user *storage.DiscordUser,
 	guildID string,
+	githubUserID string,
 	repositoryID int64,
 ) (resolveResponse, error) {
-	revokedResponse := resolveResponse{
-		Status:   statusRevoked,
-		SetupURL: setupURL(s.cfg.PublicURL, repositoryID),
-	}
-
 	accessToken, err := s.accessToken(ctx, user)
 	if err != nil {
 		if errors.Is(err, errReauthRequired) {
-			return revokedResponse, nil
+			return s.revokedResponse(githubUserID, repositoryID)
 		}
 
 		return resolveResponse{}, err
@@ -221,12 +222,26 @@ func (s *Server) resolveMember(
 
 	switch apiErr.Status {
 	case http.StatusUnauthorized:
-		return revokedResponse, nil
+		return s.revokedResponse(githubUserID, repositoryID)
 	case http.StatusNotFound:
 		return resolveResponse{Status: statusNotAMember}, nil
 	default:
 		return resolveResponse{}, fmt.Errorf("fetching guild member: %w", err)
 	}
+}
+
+// revokedResponse builds the response served when a Discord grant is unusable,
+// pointing the user at the linking flow.
+func (s *Server) revokedResponse(githubUserID string, repositoryID int64) (resolveResponse, error) {
+	setupURL, err := s.setupURL(githubUserID, repositoryID)
+	if err != nil {
+		return resolveResponse{}, err
+	}
+
+	return resolveResponse{
+		Status:   statusRevoked,
+		SetupURL: setupURL,
+	}, nil
 }
 
 func (s *Server) handleResolve(w http.ResponseWriter, r *http.Request) {
@@ -262,9 +277,16 @@ func (s *Server) handleResolve(w http.ResponseWriter, r *http.Request) {
 		claims.RepositoryID,
 	)
 	if errors.Is(err, storage.ErrNotFound) {
+		setupURL, err := s.setupURL(req.GitHubUserID, claims.RepositoryID)
+		if err != nil {
+			s.logger.Error("building setup url", "error", err)
+			s.writeProblem(w, r, http.StatusInternalServerError, "internal error")
+			return
+		}
+
 		s.writeJSON(w, http.StatusOK, resolveResponse{
 			Status:   statusUnlinked,
-			SetupURL: setupURL(s.cfg.PublicURL, claims.RepositoryID),
+			SetupURL: setupURL,
 		})
 		return
 	}
@@ -280,7 +302,7 @@ func (s *Server) handleResolve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp, err := s.resolveMember(ctx, user, req.GuildID, claims.RepositoryID)
+	resp, err := s.resolveMember(ctx, user, req.GuildID, req.GitHubUserID, claims.RepositoryID)
 	if err != nil {
 		s.logger.Error("resolving member", "error", err)
 		s.writeProblem(w, r, http.StatusInternalServerError, "internal error")
