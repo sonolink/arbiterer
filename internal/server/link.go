@@ -31,6 +31,18 @@ const (
 	linkDiscordScopes = "identify guilds.members.read"
 )
 
+const (
+	linkDetailInvalidToken     = "This link is invalid or has expired. Please re-run the check to generate a fresh one."
+	linkDetailExpired          = "This link has expired. Please re-run the check to get a fresh one."
+	linkDetailRestart          = "This linking attempt has expired or was not started in this browser. Please re-run the check to start again."
+	linkDetailGitHubAuth       = "GitHub authorization failed. Please try again."
+	linkDetailGitHubUser       = "Could not read your GitHub account. Please try again."
+	linkDetailIdentityMismatch = "This link belongs to a different GitHub account."
+	linkDetailDiscordAuth      = "Discord authorization failed. Please try again."
+	linkDetailDiscordUser      = "Could not read your Discord account. Please try again."
+	linkDetailInternal         = "Something went wrong. Please try again."
+)
+
 var errLinkExpired = errors.New("link token expired")
 
 // linkToken is the sealed payload carried through the URL from /v1/resolve
@@ -136,26 +148,15 @@ func newNonce() (string, error) {
 	return base64.RawURLEncoding.EncodeToString(b), nil
 }
 
-func (s *Server) setLinkCookie(w http.ResponseWriter, value string) {
+// writeLinkCookie sets or clears the linking cookie. A negative maxAge expires it.
+func (s *Server) writeLinkCookie(w http.ResponseWriter, value string, maxAge int) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     linkCookieName,
 		Value:    value,
 		Path:     "/link",
-		MaxAge:   int(s.cfg.LinkCookieLifetime.Seconds()),
+		MaxAge:   maxAge,
 		HttpOnly: true,
 		Secure:   true,
-		SameSite: http.SameSiteLaxMode,
-	})
-}
-
-func (s *Server) clearLinkCookie(w http.ResponseWriter) {
-	http.SetCookie(w, &http.Cookie{
-		Name:     linkCookieName,
-		Value:    "",
-		Path:     "/link",
-		MaxAge:   -1,
-		HttpOnly: true,
-		Secure:   true, // should be false for localhost in development
 		SameSite: http.SameSiteLaxMode,
 	})
 }
@@ -164,19 +165,19 @@ func (s *Server) clearLinkCookie(w http.ResponseWriter) {
 func (s *Server) handleLink(w http.ResponseWriter, r *http.Request) {
 	encoded := r.URL.Query().Get("token")
 	if encoded == "" {
-		s.writeProblem(w, r, http.StatusBadRequest, "This link is invalid or has expired. Please re-run the check to generate a fresh one.")
+		s.writeProblem(w, r, http.StatusBadRequest, linkDetailInvalidToken)
 		return
 	}
 
 	_, err := s.openLinkToken(encoded)
 	if errors.Is(err, errLinkExpired) {
-		s.writeProblem(w, r, http.StatusBadRequest, "This link has expired. Please re-run the check to get a fresh one.")
+		s.writeProblem(w, r, http.StatusBadRequest, linkDetailExpired)
 		return
 	}
 
 	if err != nil {
 		s.logger.Warn("rejecting link token", "error", err)
-		s.writeProblem(w, r, http.StatusBadRequest, "This link is invalid or has expired. Please re-run the check to generate a fresh one.")
+		s.writeProblem(w, r, http.StatusBadRequest, linkDetailInvalidToken)
 		return
 	}
 
@@ -188,14 +189,14 @@ func (s *Server) handleLinkGitHubCallback(w http.ResponseWriter, r *http.Request
 	ctx := r.Context()
 	state := r.URL.Query().Get("state")
 	if state == "" {
-		s.writeProblem(w, r, http.StatusBadRequest, "This link is invalid or has expired. Please re-run the check to generate a fresh one.")
+		s.writeProblem(w, r, http.StatusBadRequest, linkDetailInvalidToken)
 		return
 	}
 
 	lt, err := s.openLinkToken(state)
-	if errors.Is(err, errLinkExpired) || err != nil {
+	if err != nil {
 		s.logger.Warn("rejecting github callback state", "error", err)
-		s.writeProblem(w, r, http.StatusBadRequest, "This link is invalid or has expired. Please re-run the check to generate a fresh one.")
+		s.writeProblem(w, r, http.StatusBadRequest, linkDetailInvalidToken)
 		return
 	}
 
@@ -203,14 +204,14 @@ func (s *Server) handleLinkGitHubCallback(w http.ResponseWriter, r *http.Request
 	accessToken, err := s.githubClient.Exchange(ctx, code)
 	if err != nil {
 		s.logger.Error("github oauth exchange failed", "error", err)
-		s.writeProblem(w, r, http.StatusBadRequest, "GitHub authorization failed. Please try again.")
+		s.writeProblem(w, r, http.StatusBadRequest, linkDetailGitHubAuth)
 		return
 	}
 
 	ghUser, err := s.githubClient.User(ctx, accessToken)
 	if err != nil {
 		s.logger.Error("fetching github user failed", "error", err)
-		s.writeProblem(w, r, http.StatusBadRequest, "Could not read your GitHub account. Please try again.")
+		s.writeProblem(w, r, http.StatusBadRequest, linkDetailGitHubUser)
 		return
 	}
 
@@ -219,14 +220,14 @@ func (s *Server) handleLinkGitHubCallback(w http.ResponseWriter, r *http.Request
 			"expected", lt.GitHubUserID,
 			"got", ghUser.ID,
 		)
-		s.writeProblem(w, r, http.StatusBadRequest, "This link belongs to a different GitHub account.")
+		s.writeProblem(w, r, http.StatusBadRequest, linkDetailIdentityMismatch)
 		return
 	}
 
 	nonce, err := newNonce()
 	if err != nil {
 		s.logger.Error("generating nonce", "error", err)
-		s.writeProblem(w, r, http.StatusInternalServerError, "Something went wrong. Please try again.")
+		s.writeProblem(w, r, http.StatusInternalServerError, linkDetailInternal)
 		return
 	}
 
@@ -238,17 +239,17 @@ func (s *Server) handleLinkGitHubCallback(w http.ResponseWriter, r *http.Request
 
 	if err != nil {
 		s.logger.Error("sealing link cookie", "error", err)
-		s.writeProblem(w, r, http.StatusInternalServerError, "Something went wrong. Please try again.")
+		s.writeProblem(w, r, http.StatusInternalServerError, linkDetailInternal)
 		return
 	}
 
-	s.setLinkCookie(w, sealedCookie)
+	s.writeLinkCookie(w, sealedCookie, int(s.cfg.LinkCookieLifetime.Seconds()))
 
 	discordUrl, err := s.discordClient.AuthorizeURL(nonce, linkDiscordScopes)
 	if err != nil {
 		s.logger.Error("building discord auth url", "error", err)
-		s.clearLinkCookie(w)
-		s.writeProblem(w, r, http.StatusInternalServerError, "Something went wrong. Please try again.")
+		s.writeLinkCookie(w, "", -1)
+		s.writeProblem(w, r, http.StatusInternalServerError, linkDetailInternal)
 		return
 	}
 
@@ -260,21 +261,21 @@ func (s *Server) handleLinkDiscordCallback(w http.ResponseWriter, r *http.Reques
 	ctx := r.Context()
 	cookie, err := r.Cookie(linkCookieName)
 	if err != nil {
-		s.writeProblem(w, r, http.StatusBadRequest, "This linking attempt has expired or was not started in this browser. Please re-run the check to start again.")
+		s.writeProblem(w, r, http.StatusBadRequest, linkDetailRestart)
 		return
 	}
 
 	lc, err := s.openLinkCookie(cookie.Value)
 	if err != nil {
 		s.logger.Warn("rejecting link cookie", "error", err)
-		s.writeProblem(w, r, http.StatusBadRequest, "This linking attempt has expired or was not started in this browser. Please re-run the check to start again.")
+		s.writeProblem(w, r, http.StatusBadRequest, linkDetailRestart)
 		return
 	}
 
 	state := r.URL.Query().Get("state")
 	if subtle.ConstantTimeCompare([]byte(state), []byte(lc.Nonce)) != 1 {
 		s.logger.Warn("link cookie nonce mismatch")
-		s.writeProblem(w, r, http.StatusBadRequest, "This linking attempt has expired or was not started in this browser. Please re-run the check to start again.")
+		s.writeProblem(w, r, http.StatusBadRequest, linkDetailRestart)
 		return
 	}
 
@@ -282,21 +283,21 @@ func (s *Server) handleLinkDiscordCallback(w http.ResponseWriter, r *http.Reques
 	token, err := s.discordClient.Exchange(ctx, code)
 	if err != nil {
 		s.logger.Error("discord ouath exchange failed", "error", err)
-		s.writeProblem(w, r, http.StatusBadRequest, "Discord authorization failed. Please try again.")
+		s.writeProblem(w, r, http.StatusBadRequest, linkDetailDiscordAuth)
 		return
 	}
 
 	du, err := s.discordClient.Me(ctx, token.AccessToken)
 	if err != nil {
 		s.logger.Error("fetching discord user failed", "error", err)
-		s.writeProblem(w, r, http.StatusBadGateway, "Could not read your Discord account. Please try again.")
+		s.writeProblem(w, r, http.StatusBadGateway, linkDetailDiscordUser)
 		return
 	}
 
 	discordUserID, err := strconv.ParseInt(du.ID, 10, 64)
 	if err != nil {
 		s.logger.Error("parsing discord user id", "error", err)
-		s.writeProblem(w, r, http.StatusInternalServerError, "Something went wrong. Please try again.")
+		s.writeProblem(w, r, http.StatusInternalServerError, linkDetailInternal)
 		return
 	}
 
@@ -307,7 +308,7 @@ func (s *Server) handleLinkDiscordCallback(w http.ResponseWriter, r *http.Reques
 
 	if err != nil {
 		s.logger.Error("sealing discord access token", "error", err)
-		s.writeProblem(w, r, http.StatusInternalServerError, "Something went wrong. Please try again.")
+		s.writeProblem(w, r, http.StatusInternalServerError, linkDetailInternal)
 		return
 	}
 
@@ -318,7 +319,7 @@ func (s *Server) handleLinkDiscordCallback(w http.ResponseWriter, r *http.Reques
 
 	if err != nil {
 		s.logger.Error("sealing discord refresh token", "error", err)
-		s.writeProblem(w, r, http.StatusInternalServerError, "Something went wrong. Please try again.")
+		s.writeProblem(w, r, http.StatusInternalServerError, linkDetailInternal)
 		return
 	}
 
@@ -338,10 +339,10 @@ func (s *Server) handleLinkDiscordCallback(w http.ResponseWriter, r *http.Reques
 		linkUser,
 	); err != nil {
 		s.logger.Error("persisting link", "error", err)
-		s.writeProblem(w, r, http.StatusInternalServerError, "Something went wrong. Please try again.")
+		s.writeProblem(w, r, http.StatusInternalServerError, linkDetailInternal)
 		return
 	}
 
-	s.clearLinkCookie(w)
+	s.writeLinkCookie(w, "", -1)
 	s.writeJSON(w, http.StatusOK, "Your GitHub and Discord accounts are now connected.")
 }
