@@ -91,7 +91,7 @@ func runServe() error {
 
 	discordClient := discord.NewClient(cfg.Discord)
 
-	sealer, err := secrets.NewSealer(cfg.Crypto.TokenKey)
+	sealer, err := secrets.NewSealer(cfg.Secrets.TokenKey)
 	if err != nil {
 		return fmt.Errorf("creating sealer: %w", err)
 	}

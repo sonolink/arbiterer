@@ -19,7 +19,7 @@ type Config struct {
 	Discord  Discord
 	Postgres Postgres
 	Server   Server
-	Crypto   Crypto
+	Secrets  Secrets
 	GitHub   GitHub
 }
 
