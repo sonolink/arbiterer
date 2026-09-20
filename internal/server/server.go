@@ -53,7 +53,7 @@ func (s *Server) addRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /v1/resolve", s.handleResolve)
 	mux.HandleFunc("GET /link", s.handleLink)
 	mux.HandleFunc("GET /link/github/callback", s.handleLinkGitHubCallback)
-	// mux.HandleFunc("GET /link/discord/callback", s.handleLinkDiscordCallback)
+	mux.HandleFunc("GET /link/discord/callback", s.handleLinkDiscordCallback)
 }
 
 // Run starts the HTTP server and blocks until it stops, draining in-flight

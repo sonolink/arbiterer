@@ -2,6 +2,7 @@ package server
 
 import (
 	"crypto/rand"
+	"crypto/subtle"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -9,6 +10,8 @@ import (
 	"net/http"
 	"strconv"
 	"time"
+
+	"github.com/sonolink/arbiterer/internal/storage"
 )
 
 const (
@@ -157,31 +160,23 @@ func (s *Server) clearLinkCookie(w http.ResponseWriter) {
 	})
 }
 
-func (s *Server) rejectLink(w http.ResponseWriter, r *http.Request, expired bool) {
-	detail := "This link is invalid or has expired. Please re-run the check to generate a fresh one."
-	if expired {
-		detail = "This link has expired. Please re-run the check to get a fresh one."
-	}
-	s.writeProblem(w, r, http.StatusBadRequest, detail)
-}
-
 // --- GET /link?token=... ---
 func (s *Server) handleLink(w http.ResponseWriter, r *http.Request) {
 	encoded := r.URL.Query().Get("token")
 	if encoded == "" {
-		s.rejectLink(w, r, false)
+		s.writeProblem(w, r, http.StatusBadRequest, "This link is invalid or has expired. Please re-run the check to generate a fresh one.")
 		return
 	}
 
 	_, err := s.openLinkToken(encoded)
 	if errors.Is(err, errLinkExpired) {
-		s.rejectLink(w, r, true)
+		s.writeProblem(w, r, http.StatusBadRequest, "This link has expired. Please re-run the check to get a fresh one.")
 		return
 	}
 
 	if err != nil {
 		s.logger.Warn("rejecting link token", "error", err)
-		s.rejectLink(w, r, false)
+		s.writeProblem(w, r, http.StatusBadRequest, "This link is invalid or has expired. Please re-run the check to generate a fresh one.")
 		return
 	}
 
@@ -193,14 +188,14 @@ func (s *Server) handleLinkGitHubCallback(w http.ResponseWriter, r *http.Request
 	ctx := r.Context()
 	state := r.URL.Query().Get("state")
 	if state == "" {
-		s.rejectLink(w, r, false)
+		s.writeProblem(w, r, http.StatusBadRequest, "This link is invalid or has expired. Please re-run the check to generate a fresh one.")
 		return
 	}
 
 	lt, err := s.openLinkToken(state)
 	if errors.Is(err, errLinkExpired) || err != nil {
 		s.logger.Warn("rejecting github callback state", "error", err)
-		s.rejectLink(w, r, false)
+		s.writeProblem(w, r, http.StatusBadRequest, "This link is invalid or has expired. Please re-run the check to generate a fresh one.")
 		return
 	}
 
@@ -258,4 +253,95 @@ func (s *Server) handleLinkGitHubCallback(w http.ResponseWriter, r *http.Request
 	}
 
 	http.Redirect(w, r, discordUrl, http.StatusFound)
+}
+
+// --- GET /link/discord/callback?code=...&state=... ---
+func (s *Server) handleLinkDiscordCallback(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	cookie, err := r.Cookie(linkCookieName)
+	if err != nil {
+		s.writeProblem(w, r, http.StatusBadRequest, "This linking attempt has expired or was not started in this browser. Please re-run the check to start again.")
+		return
+	}
+
+	lc, err := s.openLinkCookie(cookie.Value)
+	if err != nil {
+		s.logger.Warn("rejecting link cookie", "error", err)
+		s.writeProblem(w, r, http.StatusBadRequest, "This linking attempt has expired or was not started in this browser. Please re-run the check to start again.")
+		return
+	}
+
+	state := r.URL.Query().Get("state")
+	if subtle.ConstantTimeCompare([]byte(state), []byte(lc.Nonce)) != 1 {
+		s.logger.Warn("link cookie nonce mismatch")
+		s.writeProblem(w, r, http.StatusBadRequest, "This linking attempt has expired or was not started in this browser. Please re-run the check to start again.")
+		return
+	}
+
+	code := r.URL.Query().Get("code")
+	token, err := s.discordClient.Exchange(ctx, code)
+	if err != nil {
+		s.logger.Error("discord ouath exchange failed", "error", err)
+		s.writeProblem(w, r, http.StatusBadRequest, "Discord authorization failed. Please try again.")
+		return
+	}
+
+	du, err := s.discordClient.Me(ctx, token.AccessToken)
+	if err != nil {
+		s.logger.Error("fetching discord user failed", "error", err)
+		s.writeProblem(w, r, http.StatusBadGateway, "Could not read your Discord account. Please try again.")
+		return
+	}
+
+	discordUserID, err := strconv.ParseInt(du.ID, 10, 64)
+	if err != nil {
+		s.logger.Error("parsing discord user id", "error", err)
+		s.writeProblem(w, r, http.StatusInternalServerError, "Something went wrong. Please try again.")
+		return
+	}
+
+	sealedAccess, err := s.sealer.Seal(
+		[]byte(token.AccessToken),
+		tokenAAD(discordUserID, aadFieldAccess),
+	)
+
+	if err != nil {
+		s.logger.Error("sealing discord access token", "error", err)
+		s.writeProblem(w, r, http.StatusInternalServerError, "Something went wrong. Please try again.")
+		return
+	}
+
+	sealedRefresh, err := s.sealer.Seal(
+		[]byte(token.RefreshToken),
+		tokenAAD(discordUserID, aadFieldRefresh),
+	)
+
+	if err != nil {
+		s.logger.Error("sealing discord refresh token", "error", err)
+		s.writeProblem(w, r, http.StatusInternalServerError, "Something went wrong. Please try again.")
+		return
+	}
+
+	linkUser := &storage.DiscordUser{
+		ID:                    discordUserID,
+		EncryptedAccessToken:  sealedAccess,
+		EncryptedRefreshToken: sealedRefresh,
+		TokenExpiresAt:        token.ExpiresAt,
+	}
+
+	// TODO: store.LinkGitHubDiscord needs to be implemented
+	if err := s.store.LinkGitHubDiscord(
+		ctx,
+		lc.GitHubUserID,
+		discordUserID,
+		lc.RepositoryID,
+		linkUser,
+	); err != nil {
+		s.logger.Error("persisting link", "error", err)
+		s.writeProblem(w, r, http.StatusInternalServerError, "Something went wrong. Please try again.")
+		return
+	}
+
+	s.clearLinkCookie(w)
+	s.writeJSON(w, http.StatusOK, "Your GitHub and Discord accounts are now connected.")
 }
