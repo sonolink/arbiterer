@@ -79,3 +79,15 @@ func (s *Store) UpdateDiscordUserTokens(ctx context.Context, user *DiscordUser) 
 
 	return nil
 }
+
+// LinkGitHubDiscord connects a GitHub user to a Discord account.
+func (s *Store) LinkGitHubDiscord(
+	ctx context.Context,
+	githubUserID string,
+	discordUserID int64,
+	repositoryID int64,
+	user *DiscordUser,
+) error {
+	// TODO: implement
+	panic("not implemented")
+}
