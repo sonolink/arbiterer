@@ -22,6 +22,7 @@ type Server struct {
 	logger        *slog.Logger
 	store         *storage.Store
 	discordClient *discord.Client
+	githubClient  *github.Client
 	sealer        *secrets.Sealer
 	verifier      *github.Verifier
 }
@@ -32,6 +33,7 @@ func New(
 	logger *slog.Logger,
 	store *storage.Store,
 	discordClient *discord.Client,
+	githubClient *github.Client,
 	sealer *secrets.Sealer,
 	verifier *github.Verifier,
 ) *Server {
@@ -40,6 +42,7 @@ func New(
 		logger:        logger,
 		store:         store,
 		discordClient: discordClient,
+		githubClient:  githubClient,
 		sealer:        sealer,
 		verifier:      verifier,
 	}
@@ -48,6 +51,9 @@ func New(
 func (s *Server) addRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /healthz", s.handleHealth)
 	mux.HandleFunc("POST /v1/resolve", s.handleResolve)
+	// mux.HandleFunc("GET /link", s.handleLink)
+	// mux.HandleFunc("GET /link/github/callback", s.handleLinkGitHubCallback)
+	// mux.HandleFunc("GET /link/discord/callback", s.handleLinkDiscordCallback)
 }
 
 // Run starts the HTTP server and blocks until it stops, draining in-flight

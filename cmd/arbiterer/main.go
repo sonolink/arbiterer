@@ -90,6 +90,7 @@ func runServe() error {
 	defer store.Close()
 
 	discordClient := discord.NewClient(cfg.Discord)
+	githubClient := github.NewClient(cfg.GitHub)
 
 	sealer, err := secrets.NewSealer(cfg.Secrets.TokenKey)
 	if err != nil {
@@ -103,6 +104,7 @@ func runServe() error {
 		slog.Default(),
 		store,
 		discordClient,
+		githubClient,
 		sealer,
 		verifier,
 	)

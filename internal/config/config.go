@@ -120,13 +120,15 @@ func (p Postgres) DSN() string {
 
 // Server holds the HTTP listener settings.
 type Server struct {
-	Host            string        `env:"SERVER_HOST"             envDefault:"127.0.0.1"`
-	Port            int           `env:"SERVER_PORT"             envDefault:"8080"`
-	ReadTimeout     time.Duration `env:"SERVER_READ_TIMEOUT"     envDefault:"5s"`
-	WriteTimeout    time.Duration `env:"SERVER_WRITE_TIMEOUT"    envDefault:"30s"`
-	IdleTimeout     time.Duration `env:"SERVER_IDLE_TIMEOUT"     envDefault:"120s"`
-	ShutdownTimeout time.Duration `env:"SERVER_SHUTDOWN_TIMEOUT" envDefault:"10s"`
-	PublicURL       string        `env:"SERVER_PUBLIC_URL,required"`
+	Host               string        `env:"SERVER_HOST"             envDefault:"127.0.0.1"`
+	Port               int           `env:"SERVER_PORT"             envDefault:"8080"`
+	ReadTimeout        time.Duration `env:"SERVER_READ_TIMEOUT"     envDefault:"5s"`
+	WriteTimeout       time.Duration `env:"SERVER_WRITE_TIMEOUT"    envDefault:"30s"`
+	IdleTimeout        time.Duration `env:"SERVER_IDLE_TIMEOUT"     envDefault:"120s"`
+	ShutdownTimeout    time.Duration `env:"SERVER_SHUTDOWN_TIMEOUT" envDefault:"10s"`
+	PublicURL          string        `env:"SERVER_PUBLIC_URL,required"`
+	LinkTokenLifetime  time.Duration `env:"LINK_TOKEN_LIFETIME" envDefault:"15m"`
+	LinkCookieLifetime time.Duration `env:"LINK_COOKIE_LIFETIME" envDefault:"10m"`
 }
 
 // Addr combines host and port into a listener address.
