@@ -166,8 +166,8 @@ func (k *Key) UnmarshalText(text []byte) error {
 	return nil
 }
 
-// Crypto holds the keys used to encrypt secrets at rest.
-type Crypto struct {
+// Secrets holds the keys used to encrypt secrets at rest.
+type Secrets struct {
 	TokenKey  Key `env:"TOKEN_ENCRYPTION_KEY,required"`
 	CookieKey Key `env:"COOKIE_SIGNING_KEY,required"`
 }
