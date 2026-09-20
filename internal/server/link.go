@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strconv"
 	"time"
 )
 
@@ -156,8 +157,6 @@ func (s *Server) clearLinkCookie(w http.ResponseWriter) {
 	})
 }
 
-// --- GET /link?token=... ---
-
 func (s *Server) rejectLink(w http.ResponseWriter, r *http.Request, expired bool) {
 	detail := "This link is invalid or has expired. Please re-run the check to generate a fresh one."
 	if expired {
@@ -166,6 +165,7 @@ func (s *Server) rejectLink(w http.ResponseWriter, r *http.Request, expired bool
 	s.writeProblem(w, r, http.StatusBadRequest, detail)
 }
 
+// --- GET /link?token=... ---
 func (s *Server) handleLink(w http.ResponseWriter, r *http.Request) {
 	encoded := r.URL.Query().Get("token")
 	if encoded == "" {
@@ -188,3 +188,74 @@ func (s *Server) handleLink(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, s.githubClient.AuthorizeURL(encoded), http.StatusFound)
 }
 
+// --- GET /link/github/callback?code=...&state=... ---
+func (s *Server) handleLinkGitHubCallback(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	state := r.URL.Query().Get("state")
+	if state == "" {
+		s.rejectLink(w, r, false)
+		return
+	}
+
+	lt, err := s.openLinkToken(state)
+	if errors.Is(err, errLinkExpired) || err != nil {
+		s.logger.Warn("rejecting github callback state", "error", err)
+		s.rejectLink(w, r, false)
+		return
+	}
+
+	code := r.URL.Query().Get("code")
+	accessToken, err := s.githubClient.Exchange(ctx, code)
+	if err != nil {
+		s.logger.Error("github oauth exchange failed", "error", err)
+		s.writeProblem(w, r, http.StatusBadRequest, "GitHub authorization failed. Please try again.")
+		return
+	}
+
+	ghUser, err := s.githubClient.User(ctx, accessToken)
+	if err != nil {
+		s.logger.Error("fetching github user failed", "error", err)
+		s.writeProblem(w, r, http.StatusBadRequest, "Could not read your GitHub account. Please try again.")
+		return
+	}
+
+	if strconv.FormatInt(ghUser.ID, 10) != lt.GitHubUserID {
+		s.logger.Warn("github identity mismatch",
+			"expected", lt.GitHubUserID,
+			"got", ghUser.ID,
+		)
+		s.writeProblem(w, r, http.StatusBadRequest, "This link belongs to a different GitHub account.")
+		return
+	}
+
+	nonce, err := newNonce()
+	if err != nil {
+		s.logger.Error("generating nonce", "error", err)
+		s.writeProblem(w, r, http.StatusInternalServerError, "Something went wrong. Please try again.")
+		return
+	}
+
+	sealedCookie, err := s.sealLinkCookie(linkCookie{
+		Nonce:        nonce,
+		RepositoryID: lt.RepositoryID,
+		GitHubUserID: lt.GitHubUserID,
+	})
+
+	if err != nil {
+		s.logger.Error("sealing link cookie", "error", err)
+		s.writeProblem(w, r, http.StatusInternalServerError, "Something went wrong. Please try again.")
+		return
+	}
+
+	s.setLinkCookie(w, sealedCookie)
+
+	discordUrl, err := s.discordClient.AuthorizeURL(nonce, linkDiscordScopes)
+	if err != nil {
+		s.logger.Error("building discord auth url", "error", err)
+		s.clearLinkCookie(w)
+		s.writeProblem(w, r, http.StatusInternalServerError, "Something went wrong. Please try again.")
+		return
+	}
+
+	http.Redirect(w, r, discordUrl, http.StatusFound)
+}
