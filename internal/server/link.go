@@ -155,3 +155,27 @@ func (s *Server) clearLinkCookie(w http.ResponseWriter) {
 		SameSite: http.SameSiteLaxMode,
 	})
 }
+
+// --- GET /link?token=... ---
+func (s *Server) handleLink(w http.ResponseWriter, r *http.Request) {
+	encoded := r.URL.Query().Get("token")
+	if encoded == "" {
+		s.writeProblem(w, r, http.StatusBadRequest, "This link is invalid or has expired. Please re-run the check to generate a fresh one.")
+		return
+	}
+
+	_, err := s.openLinkToken(encoded)
+	if errors.Is(err, errLinkExpired) {
+		s.writeProblem(w, r, http.StatusBadRequest, "This link has expired. Please re-run the check to get a fresh one.")
+		return
+	}
+
+	if err != nil {
+		s.logger.Warn("rejecting link token", "error", err)
+		s.writeProblem(w, r, http.StatusBadRequest, "This link is invalid or has expired. Please re-run the check to generate a fresh one.")
+		return
+	}
+
+	http.Redirect(w, r, s.githubClient.AuthorizeURL(encoded), http.StatusFound)
+}
+
