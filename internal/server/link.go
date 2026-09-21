@@ -15,17 +15,16 @@ import (
 )
 
 const (
-	// linkTokenAAD is the fixed context that seals link tokens.
-	linkTokenAAD = "link-token"
+	// linkTokenAAD is the AAD context for link tokens.
+	linkTokenAAD = "arbiterer/link-token/v1"
 
-	// linkCookieAAD is the fixed context that seals link cookies.
-	linkCookieAAD = "link-cookie"
+	// linkCookieAAD is the AAD context for the linking cookie.
+	linkCookieAAD = "arbiterer/link-cookie/v1"
 
-	// linkCookieName is the intermediate cookie the GitHub leg sets.
+	// linkCookieName is the name of the linking cookie.
 	linkCookieName = "arbiterer_link"
 
-	// linkDiscordScopes must cover what resolveMember needs later:
-	// identify for the user id, guilds.members.read for /users/@me/guilds/{id}/member.
+	// linkDiscordScopes are the OAuth scopes requested from Discord.
 	linkDiscordScopes = "identify guilds.members.read"
 )
 
