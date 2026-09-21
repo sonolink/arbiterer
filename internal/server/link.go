@@ -15,12 +15,10 @@ import (
 )
 
 const (
-	// linkTokenAAD is the fixed context that seals link tokens. Tokens are
-	// bearer-style and not bound to a stored row, so unlike tokenAAD there is
-	// no per-user component.
+	// linkTokenAAD is the fixed context that seals link tokens.
 	linkTokenAAD = "link-token"
 
-	// linkCookieAAD seals the intermediate linking cookie the same way.
+	// linkCookieAAD is the fixed context that seals link cookies.
 	linkCookieAAD = "link-cookie"
 
 	// linkCookieName is the intermediate cookie the GitHub leg sets.
@@ -66,13 +64,11 @@ func (s *Server) sealLinkToken(githubUserID string, repositoryID int64) (string,
 		RepositoryID: repositoryID,
 		Expiry:       time.Now().Add(s.cfg.LinkTokenLifetime),
 	})
-
 	if err != nil {
 		return "", fmt.Errorf("sealing link token: %w", err)
 	}
 
-	sealed, err := s.sealer.Seal(payload, []byte(linkTokenAAD))
-
+	sealed, err := s.tokenSealer.Seal(payload, []byte(linkTokenAAD))
 	if err != nil {
 		return "", fmt.Errorf("sealing link token: %w", err)
 	}
@@ -87,7 +83,7 @@ func (s *Server) openLinkToken(encoded string) (*linkToken, error) {
 		return nil, fmt.Errorf("decoding link token: %w", err)
 	}
 
-	payload, err := s.sealer.Open(sealed, []byte(linkTokenAAD))
+	payload, err := s.tokenSealer.Open(sealed, []byte(linkTokenAAD))
 	if err != nil {
 		return nil, fmt.Errorf("opening link token: %w", err)
 	}
@@ -111,7 +107,7 @@ func (s *Server) sealLinkCookie(c linkCookie) (string, error) {
 		return "", fmt.Errorf("sealing link cookie: %w", err)
 	}
 
-	sealed, err := s.sealer.Seal(payload, []byte(linkCookieAAD))
+	sealed, err := s.cookieSealer.Seal(payload, []byte(linkCookieAAD))
 	if err != nil {
 		return "", fmt.Errorf("sealing link cookie: %w", err)
 	}
@@ -126,7 +122,7 @@ func (s *Server) openLinkCookie(encoded string) (*linkCookie, error) {
 		return nil, fmt.Errorf("decoding link cookie: %w", err)
 	}
 
-	payload, err := s.sealer.Open(sealed, []byte(linkCookieAAD))
+	payload, err := s.cookieSealer.Open(sealed, []byte(linkCookieAAD))
 	if err != nil {
 		return nil, fmt.Errorf("opening link cookie: %w", err)
 	}
@@ -174,7 +170,6 @@ func (s *Server) handleLink(w http.ResponseWriter, r *http.Request) {
 		s.writeProblem(w, r, http.StatusBadRequest, linkDetailExpired)
 		return
 	}
-
 	if err != nil {
 		s.logger.Warn("rejecting link token", "error", err)
 		s.writeProblem(w, r, http.StatusBadRequest, linkDetailInvalidOrExpired)
@@ -243,7 +238,6 @@ func (s *Server) handleLinkGitHubCallback(w http.ResponseWriter, r *http.Request
 		RepositoryID: lt.RepositoryID,
 		GitHubUserID: lt.GitHubUserID,
 	})
-
 	if err != nil {
 		s.logger.Error("sealing link cookie", "error", err)
 		s.writeProblem(w, r, http.StatusInternalServerError, linkDetailInternal)
@@ -308,22 +302,20 @@ func (s *Server) handleLinkDiscordCallback(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	sealedAccess, err := s.sealer.Seal(
+	sealedAccess, err := s.tokenSealer.Seal(
 		[]byte(token.AccessToken),
 		tokenAAD(discordUserID, aadFieldAccess),
 	)
-
 	if err != nil {
 		s.logger.Error("sealing discord access token", "error", err)
 		s.writeProblem(w, r, http.StatusInternalServerError, linkDetailInternal)
 		return
 	}
 
-	sealedRefresh, err := s.sealer.Seal(
+	sealedRefresh, err := s.tokenSealer.Seal(
 		[]byte(token.RefreshToken),
 		tokenAAD(discordUserID, aadFieldRefresh),
 	)
-
 	if err != nil {
 		s.logger.Error("sealing discord refresh token", "error", err)
 		s.writeProblem(w, r, http.StatusInternalServerError, linkDetailInternal)

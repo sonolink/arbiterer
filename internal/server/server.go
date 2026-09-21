@@ -23,7 +23,8 @@ type Server struct {
 	store         *storage.Store
 	discordClient *discord.Client
 	githubClient  *github.Client
-	sealer        *secrets.Sealer
+	tokenSealer   *secrets.Sealer
+	cookieSealer  *secrets.Sealer
 	verifier      *github.Verifier
 }
 
@@ -34,7 +35,8 @@ func New(
 	store *storage.Store,
 	discordClient *discord.Client,
 	githubClient *github.Client,
-	sealer *secrets.Sealer,
+	tokenSealer *secrets.Sealer,
+	cookieSealer *secrets.Sealer,
 	verifier *github.Verifier,
 ) *Server {
 	return &Server{
@@ -43,7 +45,8 @@ func New(
 		store:         store,
 		discordClient: discordClient,
 		githubClient:  githubClient,
-		sealer:        sealer,
+		tokenSealer:   tokenSealer,
+		cookieSealer:  cookieSealer,
 		verifier:      verifier,
 	}
 }
