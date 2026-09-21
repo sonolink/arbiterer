@@ -8,6 +8,8 @@ import (
 
 	"github.com/sonolink/arbiterer/internal/config"
 	"github.com/sonolink/arbiterer/internal/discord"
+	"github.com/sonolink/arbiterer/internal/github"
+	"github.com/sonolink/arbiterer/internal/secrets"
 	"github.com/sonolink/arbiterer/internal/server"
 	"github.com/sonolink/arbiterer/internal/storage"
 )
@@ -88,12 +90,29 @@ func runServe() error {
 	defer store.Close()
 
 	discordClient := discord.NewClient(cfg.Discord)
+	githubClient := github.NewClient(cfg.GitHub)
+
+	tokenSealer, err := secrets.NewSealer(cfg.Secrets.TokenKey)
+	if err != nil {
+		return fmt.Errorf("creating token sealer: %w", err)
+	}
+
+	cookieSealer, err := secrets.NewSealer(cfg.Secrets.CookieKey)
+	if err != nil {
+		return fmt.Errorf("creating cookie sealer: %w", err)
+	}
+
+	verifier := github.NewVerifier(ctx, cfg.GitHub)
 
 	srv := server.New(
 		cfg.Server,
 		slog.Default(),
 		store,
 		discordClient,
+		githubClient,
+		tokenSealer,
+		cookieSealer,
+		verifier,
 	)
 	if err := srv.Run(); err != nil {
 		return fmt.Errorf("running the server: %w", err)

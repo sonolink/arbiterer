@@ -3,6 +3,7 @@ package storage
 import (
 	"context"
 	"embed"
+	"errors"
 	"fmt"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -12,6 +13,9 @@ import (
 
 //go:embed migrations/*.sql
 var migrations embed.FS
+
+// ErrNotFound is returned when a query matches no rows.
+var ErrNotFound = errors.New("storage: not found")
 
 // Store enables interaction with the postgres database.
 type Store struct {
