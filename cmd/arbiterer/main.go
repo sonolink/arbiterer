@@ -90,10 +90,16 @@ func runServe() error {
 	defer store.Close()
 
 	discordClient := discord.NewClient(cfg.Discord)
+	githubClient := github.NewClient(cfg.GitHub)
 
-	sealer, err := secrets.NewSealer(cfg.Crypto.TokenKey)
+	tokenSealer, err := secrets.NewSealer(cfg.Secrets.TokenKey)
 	if err != nil {
-		return fmt.Errorf("creating sealer: %w", err)
+		return fmt.Errorf("creating token sealer: %w", err)
+	}
+
+	cookieSealer, err := secrets.NewSealer(cfg.Secrets.CookieKey)
+	if err != nil {
+		return fmt.Errorf("creating cookie sealer: %w", err)
 	}
 
 	verifier := github.NewVerifier(ctx, cfg.GitHub)
@@ -103,7 +109,9 @@ func runServe() error {
 		slog.Default(),
 		store,
 		discordClient,
-		sealer,
+		githubClient,
+		tokenSealer,
+		cookieSealer,
 		verifier,
 	)
 	if err := srv.Run(); err != nil {
