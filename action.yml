@@ -2,7 +2,7 @@ name: Resolve Discord link
 description: Resolve a GitHub user's Discord account through Arbiterer using GitHub OIDC.
 inputs:
   guild-id:
-    description: Discord server ID to check membership in. Omit to check only the account link. The result will include a 
+    description: Discord server ID to check membership in. Omit to check only the account link. The result will include a
       GuildMember object if the user is a member of the server.
     required: false
 outputs:
@@ -31,3 +31,4 @@ runs:
           const path = require('path');
           const resolve = require(path.join(process.env.ARBITERER_ACTION_PATH, '.github', 'scripts', 'resolve.js'));
           await resolve({ core, context, github });
+        guild-id: ${{ inputs.guild-id }}
