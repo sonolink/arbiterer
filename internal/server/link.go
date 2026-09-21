@@ -245,7 +245,7 @@ func (s *Server) handleLinkGitHubCallback(w http.ResponseWriter, r *http.Request
 
 	s.writeLinkCookie(w, sealedCookie, int(s.cfg.LinkCookieLifetime.Seconds()))
 
-	discordUrl, err := s.discordClient.AuthorizeURL(nonce, linkDiscordScopes)
+	discordURL, err := s.discordClient.AuthorizeURL(nonce, linkDiscordScopes)
 	if err != nil {
 		s.logger.Error("building discord auth url", "error", err)
 		s.writeLinkCookie(w, "", -1)
@@ -253,7 +253,7 @@ func (s *Server) handleLinkGitHubCallback(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	http.Redirect(w, r, discordUrl, http.StatusFound)
+	http.Redirect(w, r, discordURL, http.StatusFound)
 }
 
 // --- GET /link/discord/callback?code=...&state=... ---
