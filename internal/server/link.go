@@ -45,7 +45,7 @@ const (
 
 var errLinkExpired = errors.New("link token expired")
 
-// linkToken is the sealed payload carried through the URL from /v1/resolve
+// linkToken is the sealed payload carried through the URL from /v1/resolve.
 type linkToken struct {
 	GitHubUserID string    `json:"github_user_id"`
 	RepositoryID int64     `json:"repository_id"`
@@ -161,7 +161,7 @@ func (s *Server) writeLinkCookie(w http.ResponseWriter, value string, maxAge int
 	})
 }
 
-// --- GET /link?token=... ---
+// --- GET /link?token=... ---.
 func (s *Server) handleLink(w http.ResponseWriter, r *http.Request) {
 	encoded := r.URL.Query().Get("token")
 	if encoded == "" {
@@ -191,7 +191,7 @@ func (s *Server) handleLink(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, s.githubClient.AuthorizeURL(state), http.StatusFound)
 }
 
-// --- GET /link/github/callback?code=...&state=... ---
+// --- GET /link/github/callback?code=...&state=... ---.
 func (s *Server) handleLinkGitHubCallback(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	state := r.URL.Query().Get("state")
@@ -263,7 +263,7 @@ func (s *Server) handleLinkGitHubCallback(w http.ResponseWriter, r *http.Request
 	http.Redirect(w, r, discordURL, http.StatusFound)
 }
 
-// --- GET /link/discord/callback?code=...&state=... ---
+// --- GET /link/discord/callback?code=...&state=... ---.
 func (s *Server) handleLinkDiscordCallback(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	cookie, err := r.Cookie(linkCookieName)
