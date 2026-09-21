@@ -32,7 +32,7 @@ const (
 )
 
 const (
-	linkDetailInvalidToken     = "This link is invalid or has expired. Please re-run the check to generate a fresh one."
+	linkDetailInvalidOrExpired = "This link is invalid or has expired. Please re-run the check to generate a fresh one."
 	linkDetailExpired          = "This link has expired. Please re-run the check to get a fresh one."
 	linkDetailRestart          = "This linking attempt has expired or was not started in this browser. Please re-run the check to start again."
 	linkDetailGitHubAuth       = "GitHub authorization failed. Please try again."
@@ -165,11 +165,11 @@ func (s *Server) writeLinkCookie(w http.ResponseWriter, value string, maxAge int
 func (s *Server) handleLink(w http.ResponseWriter, r *http.Request) {
 	encoded := r.URL.Query().Get("token")
 	if encoded == "" {
-		s.writeProblem(w, r, http.StatusBadRequest, linkDetailInvalidToken)
+		s.writeProblem(w, r, http.StatusBadRequest, linkDetailInvalidOrExpired)
 		return
 	}
 
-	_, err := s.openLinkToken(encoded)
+	lt, err := s.openLinkToken(encoded)
 	if errors.Is(err, errLinkExpired) {
 		s.writeProblem(w, r, http.StatusBadRequest, linkDetailExpired)
 		return
@@ -177,11 +177,18 @@ func (s *Server) handleLink(w http.ResponseWriter, r *http.Request) {
 
 	if err != nil {
 		s.logger.Warn("rejecting link token", "error", err)
-		s.writeProblem(w, r, http.StatusBadRequest, linkDetailInvalidToken)
+		s.writeProblem(w, r, http.StatusBadRequest, linkDetailInvalidOrExpired)
 		return
 	}
 
-	http.Redirect(w, r, s.githubClient.AuthorizeURL(encoded), http.StatusFound)
+	state, err := s.sealLinkToken(lt.GitHubUserID, lt.RepositoryID)
+	if err != nil {
+		s.logger.Error("sealing link state", "error", err)
+		s.writeProblem(w, r, http.StatusInternalServerError, linkDetailInternal)
+		return
+	}
+
+	http.Redirect(w, r, s.githubClient.AuthorizeURL(state), http.StatusFound)
 }
 
 // --- GET /link/github/callback?code=...&state=... ---
@@ -189,14 +196,14 @@ func (s *Server) handleLinkGitHubCallback(w http.ResponseWriter, r *http.Request
 	ctx := r.Context()
 	state := r.URL.Query().Get("state")
 	if state == "" {
-		s.writeProblem(w, r, http.StatusBadRequest, linkDetailInvalidToken)
+		s.writeProblem(w, r, http.StatusBadRequest, linkDetailInvalidOrExpired)
 		return
 	}
 
 	lt, err := s.openLinkToken(state)
 	if err != nil {
 		s.logger.Warn("rejecting github callback state", "error", err)
-		s.writeProblem(w, r, http.StatusBadRequest, linkDetailInvalidToken)
+		s.writeProblem(w, r, http.StatusBadRequest, linkDetailInvalidOrExpired)
 		return
 	}
 
