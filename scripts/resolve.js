@@ -66,5 +66,6 @@ module.exports = async function resolve({ core, context, guildId }) {
   const setupUrl = result.setup_url ?? '';
   core.setOutput('status', status);
   core.setOutput('setup-url', setupUrl);
+  core.setOutput('guild-id', guildId ?? null);
   core.setOutput('member', result.member ?? null);
 }
