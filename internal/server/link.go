@@ -351,8 +351,6 @@ func (s *Server) handleLinkDiscordCallback(w http.ResponseWriter, r *http.Reques
 	s.writeLinkCookie(w, "", -1)
 
 	if lc.PullRequestNumber != 0 {
-		// The linking flow doesn't check guild membership, so the comment can
-		// only report the account link itself, not membership status.
 		if err := s.syncSetupComment(ctx, lc.Repository, lc.PullRequestNumber, statusLinked, "", false); err != nil {
 			s.logger.Error("syncing setup comment", "error", err)
 		}

@@ -30,13 +30,13 @@ func (c *Client) PullRequestAuthorLogin(ctx context.Context, repo string, pullRe
 	return issue.User.Login, nil
 }
 
-// Comment is a comment on an issue or pull request.
+// Comment is a comment on a pull request.
 type Comment struct {
 	ID   int64  `json:"id"`
 	Body string `json:"body"`
 }
 
-// listComments returns every comment on the given issue or pull request.
+// listComments returns every comment on the given pull request.
 func (c *Client) listComments(ctx context.Context, repo string, pullRequestNumber int64) ([]Comment, error) {
 	var all []Comment
 
@@ -58,8 +58,7 @@ func (c *Client) listComments(ctx context.Context, repo string, pullRequestNumbe
 	}
 }
 
-// FindComment returns the first comment on the given issue or pull request
-// whose body contains marker, or nil if there is none.
+// FindComment returns the first comment on the given pull request whose body contains marker, or nil if there is none.
 func (c *Client) FindComment(ctx context.Context, repo string, pullRequestNumber int64, marker string) (*Comment, error) {
 	comments, err := c.listComments(ctx, repo, pullRequestNumber)
 	if err != nil {
@@ -75,7 +74,7 @@ func (c *Client) FindComment(ctx context.Context, repo string, pullRequestNumber
 	return nil, nil
 }
 
-// CreateComment posts a new comment on the given issue or pull request.
+// CreateComment posts a new comment on the given pull request.
 func (c *Client) CreateComment(ctx context.Context, repo string, pullRequestNumber int64, body string) error {
 	path := fmt.Sprintf("/repos/%s/issues/%d/comments", repo, pullRequestNumber)
 

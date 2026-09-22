@@ -7,21 +7,13 @@ import (
 )
 
 // commentMarker is hidden in the comment body so later runs can find and edit
-// it instead of posting a new one every time. HTML comments don't render, so
-// it's never shown to the user.
+// it instead of posting a new one every time (not shown to the user).
 const commentMarker = "<!-- arbiterer-setup-message -->"
 
-// commentMessage describes what a contributor needs to do next for a given
-// resolve status. guildChecked reports whether this resolve request checked
-// server membership at all, since a "linked" contributor who was also
-// confirmed as a member should hear about that too.
+// commentMessage describes what a contributor needs to do next for a given resolve status.
 func commentMessage(status resolveStatus, setupURL string, guildChecked bool) string {
 	switch status {
 	case statusLinked:
-		if guildChecked {
-			return "Your GitHub account is linked to your Discord account and you are also a member of the required server. No further action is needed."
-		}
-
 		return "Your GitHub account is linked to your Discord account. No further action is needed."
 	case statusUnlinked:
 		return fmt.Sprintf("Please [link your Discord account](%s) to your GitHub account.", setupURL)
@@ -38,20 +30,14 @@ func commentMessage(status resolveStatus, setupURL string, guildChecked bool) st
 }
 
 // previousMessage extracts the message text from a previous marked comment's
-// body, stripping the marker and the leading mention so it can be re-wrapped
-// under a fresh, unstruck mention line.
+// body, stripping the marker and the leading mention.
 func previousMessage(body, mention string) string {
 	text := strings.TrimSpace(strings.ReplaceAll(body, commentMarker, ""))
 	return strings.TrimPrefix(text, mention)
 }
 
 // syncSetupComment reconciles the comment telling a contributor what they
-// need to do to link their Discord account, on the given issue or pull
-// request. Once linked, a previous comment is edited to say so rather than
-// left showing stale instructions; if a contributor was already linked
-// before ever seeing that comment, nothing is posted. It is best-effort: the
-// action's outputs already carry the status, so a failure here is logged
-// rather than failing the whole request.
+// need to do to link their Discord account, on the given pull request.
 func (s *Server) syncSetupComment(
 	ctx context.Context,
 	repo string,
@@ -68,9 +54,6 @@ func (s *Server) syncSetupComment(
 	message := commentMessage(status, setupURL, guildChecked)
 
 	if status == statusLinked && (existing == nil || strings.Contains(existing.Body, message)) {
-		// Nothing to tell them: either they were never shown a setup comment,
-		// or this comment already reflects the linked state - editing again
-		// would strike through an already-struck message.
 		return nil
 	}
 
@@ -85,8 +68,6 @@ func (s *Server) syncSetupComment(
 
 		body = commentMarker + "\n\n@" + author + ", " + message
 	case status == statusLinked:
-		// Keep the original mention on the struck-through line; editing a
-		// comment doesn't notify anyone, so the new line doesn't need one.
 		author, err := s.githubClient.PullRequestAuthorLogin(ctx, repo, pullRequestNumber)
 		if err != nil {
 			return fmt.Errorf("fetching issue author: %w", err)

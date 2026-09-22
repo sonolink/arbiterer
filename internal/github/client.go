@@ -21,21 +21,20 @@ const (
 	// version is a place holder, it should actually later come from somewhere standard.
 	userAgent = "arbiterer/0.1 (https://github.com/sonolink/arbiterer)"
 
-	// jwtLifetime is how long a GitHub App JWT is valid for. GitHub allows at
-	// most 10 minutes; this stays under that to absorb clock drift.
+	// jwtLifetime is how long a GitHub App JWT is valid for (maximum of 10 minutes)
 	jwtLifetime = 9 * time.Minute
+
 	// jwtClockSkew backdates the issued-at claim so a slightly-behind clock on
 	// GitHub's side still accepts the token, per GitHub's recommendation:
 	// https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/generating-a-json-web-token-jwt-for-a-github-app
 	jwtClockSkew = 60 * time.Second
+
 	// installTokenSkew treats a cached installation token as expired this
 	// long before it actually is, so a request never races the real expiry.
 	installTokenSkew = time.Minute
 )
 
-// Client talks to GitHub using the given application credentials: it drives
-// the OAuth login flow for linking a contributor's account, and authenticates
-// as the Arbiterer GitHub App to act on repositories where it is installed.
+// Client talks to GitHub using the given application credentials.
 type Client struct {
 	cfg        config.GitHub
 	httpClient *http.Client
@@ -184,9 +183,8 @@ func readBody(resp *http.Response) ([]byte, error) {
 	return body, nil
 }
 
-// doInstallationJSON sends a JSON request to the GitHub REST API, authorized
-// as the app's installation on repo, and decodes a JSON response into out,
-// if given.
+// doInstallationJSON sends a JSON request to the GitHub API, authorized
+// as the app's installation on repo, and decodes a JSON response into outn.
 func (c *Client) doInstallationJSON(ctx context.Context, method, repo, path string, body, out any) error {
 	token, err := c.installationToken(ctx, repo)
 	if err != nil {
@@ -196,8 +194,7 @@ func (c *Client) doInstallationJSON(ctx context.Context, method, repo, path stri
 	return c.doJSON(ctx, method, path, token, body, out)
 }
 
-// doJSON sends a JSON request, authorized with token, to the GitHub REST API
-// and decodes a JSON response into out, if given.
+// doJSON sends a JSON request, authorized with token to the GitHub REST API and decodes a JSON response into out.
 func (c *Client) doJSON(ctx context.Context, method, path, token string, body, out any) error {
 	var reqBody io.Reader
 	if body != nil {
