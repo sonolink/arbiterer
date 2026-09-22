@@ -1,3 +1,5 @@
-// Package github talks to GitHub: it drives the OAauth login flow
-// for linking a contributor's account, and verifies OIDC tokens from actions.
+// Package github talks to GitHub: it verifies the OIDC tokens GitHub Actions
+// issues to workflow runs, drives the OAuth login flow for linking a
+// contributor's account, and authenticates as the Arbiterer GitHub App to
+// act on repositories where it is installed.
 package github

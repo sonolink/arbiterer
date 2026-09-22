@@ -1,6 +1,7 @@
 package config
 
 import (
+	"crypto/rsa"
 	"encoding/base64"
 	"fmt"
 	"io"
@@ -11,6 +12,7 @@ import (
 	"time"
 
 	"github.com/caarlos0/env/v11"
+	"github.com/golang-jwt/jwt/v5"
 )
 
 // Config holds all runtime settings for the application.
@@ -176,8 +178,25 @@ type Secrets struct {
 
 // GitHub holds the application settings used for OAuth and OIDC.
 type GitHub struct {
-	ClientID     string `env:"GITHUB_CLIENT_ID,required"`
-	ClientSecret string `env:"GITHUB_CLIENT_SECRET,required"`
-	RedirectURI  string `env:"GITHUB_REDIRECT_URI,required"`
-	OIDCAudience string `env:"GITHUB_OIDC_AUDIENCE,required"`
+	ClientID     string     `env:"GITHUB_CLIENT_ID,required"`
+	ClientSecret string     `env:"GITHUB_CLIENT_SECRET,required"`
+	PrivateKey   PrivateKey `env:"GITHUB_CLIENT_PRIVATE_KEY,required"`
+	RedirectURI  string     `env:"GITHUB_REDIRECT_URI,required"`
+	OIDCAudience string     `env:"GITHUB_OIDC_AUDIENCE,required"`
+}
+
+// PrivateKey is a GitHub App's RSA private key, decoded from a PEM encoded
+// environment value.
+type PrivateKey rsa.PrivateKey
+
+// UnmarshalText parses a PEM encoded RSA private key.
+func (k *PrivateKey) UnmarshalText(text []byte) error {
+	key, err := jwt.ParseRSAPrivateKeyFromPEM(text)
+	if err != nil {
+		return fmt.Errorf("invalid private key: %w", err)
+	}
+
+	*k = PrivateKey(*key)
+
+	return nil
 }

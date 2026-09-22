@@ -16,8 +16,9 @@ import (
 )
 
 type resolveRequest struct {
-	GitHubUserID string `json:"github_user_id"`
-	GuildID      string `json:"guild_id"`
+	GitHubUserID      string `json:"github_user_id"`
+	GuildID           string `json:"guild_id"`
+	PullRequestNumber int64  `json:"issue_number"`
 }
 
 type resolveStatus string
@@ -37,8 +38,8 @@ type resolveResponse struct {
 
 // setupURL builds the link a contributor follows to connect their accounts,
 // carrying a sealed, short-lived bearer token.
-func (s *Server) setupURL(githubUserID string, repositoryID int64) (string, error) {
-	token, err := s.sealLinkToken(githubUserID, repositoryID)
+func (s *Server) setupURL(githubUserID string, repositoryID int64, repo string, pullRequestNumber int64) (string, error) {
+	token, err := s.sealLinkToken(githubUserID, repositoryID, repo, pullRequestNumber)
 	if err != nil {
 		return "", fmt.Errorf("building setup url: %w", err)
 	}
@@ -200,11 +201,13 @@ func (s *Server) resolveMember(
 	guildID string,
 	githubUserID string,
 	repositoryID int64,
+	repo string,
+	pullRequestNumber int64,
 ) (resolveResponse, error) {
 	accessToken, err := s.accessToken(ctx, user)
 	if err != nil {
 		if errors.Is(err, errReauthRequired) {
-			return s.revokedResponse(githubUserID, repositoryID)
+			return s.revokedResponse(githubUserID, repositoryID, repo, pullRequestNumber)
 		}
 
 		return resolveResponse{}, err
@@ -222,7 +225,7 @@ func (s *Server) resolveMember(
 
 	switch apiErr.Status {
 	case http.StatusUnauthorized:
-		return s.revokedResponse(githubUserID, repositoryID)
+		return s.revokedResponse(githubUserID, repositoryID, repo, pullRequestNumber)
 	case http.StatusNotFound:
 		return resolveResponse{Status: statusNotAMember}, nil
 	default:
@@ -232,8 +235,8 @@ func (s *Server) resolveMember(
 
 // revokedResponse builds the response served when a Discord grant is unusable,
 // pointing the user at the linking flow.
-func (s *Server) revokedResponse(githubUserID string, repositoryID int64) (resolveResponse, error) {
-	setupURL, err := s.setupURL(githubUserID, repositoryID)
+func (s *Server) revokedResponse(githubUserID string, repositoryID int64, repo string, pullRequestNumber int64) (resolveResponse, error) {
+	setupURL, err := s.setupURL(githubUserID, repositoryID, repo, pullRequestNumber)
 	if err != nil {
 		return resolveResponse{}, err
 	}
@@ -276,37 +279,44 @@ func (s *Server) handleResolve(w http.ResponseWriter, r *http.Request) {
 		req.GitHubUserID,
 		claims.RepositoryID,
 	)
-	if errors.Is(err, storage.ErrNotFound) {
-		setupURL, err := s.setupURL(req.GitHubUserID, claims.RepositoryID)
+
+	var resp resolveResponse
+
+	switch {
+	case errors.Is(err, storage.ErrNotFound):
+		setupURL, err := s.setupURL(req.GitHubUserID, claims.RepositoryID, claims.Repository, req.PullRequestNumber)
 		if err != nil {
 			s.logger.Error("building setup url", "error", err)
 			s.writeProblem(w, r, http.StatusInternalServerError, "internal error")
 			return
 		}
 
-		s.writeJSON(w, http.StatusOK, resolveResponse{
+		resp = resolveResponse{
 			Status:   statusUnlinked,
 			SetupURL: setupURL,
-		})
-		return
-	}
-
-	if err != nil {
+		}
+	case err != nil:
 		s.logger.Error("looking up connection", "error", err)
 		s.writeProblem(w, r, http.StatusInternalServerError, "internal error")
+
 		return
+	case req.GuildID == "":
+		resp = resolveResponse{Status: statusLinked}
+	default:
+		resp, err = s.resolveMember(ctx, user, req.GuildID, req.GitHubUserID, claims.RepositoryID, claims.Repository, req.PullRequestNumber)
+		if err != nil {
+			s.logger.Error("resolving member", "error", err)
+			s.writeProblem(w, r, http.StatusInternalServerError, "internal error")
+
+			return
+		}
 	}
 
-	if req.GuildID == "" {
-		s.writeJSON(w, http.StatusOK, resolveResponse{Status: statusLinked})
-		return
-	}
-
-	resp, err := s.resolveMember(ctx, user, req.GuildID, req.GitHubUserID, claims.RepositoryID)
-	if err != nil {
-		s.logger.Error("resolving member", "error", err)
-		s.writeProblem(w, r, http.StatusInternalServerError, "internal error")
-		return
+	if req.PullRequestNumber != 0 {
+		guildChecked := req.GuildID != ""
+		if err := s.syncSetupComment(ctx, claims.Repository, req.PullRequestNumber, resp.Status, resp.SetupURL, guildChecked); err != nil {
+			s.logger.Error("syncing setup comment", "error", err)
+		}
 	}
 
 	s.writeJSON(w, http.StatusOK, resp)
