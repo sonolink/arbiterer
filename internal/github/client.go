@@ -21,7 +21,7 @@ const (
 	// version is a place holder, it should actually later come from somewhere standard.
 	userAgent = "arbiterer/0.1 (https://github.com/sonolink/arbiterer)"
 
-	// jwtLifetime is how long a GitHub App JWT is valid for (maximum of 10 minutes)
+	// jwtLifetime is how long a GitHub App JWT is valid for (maximum of 10 minutes).
 	jwtLifetime = 9 * time.Minute
 
 	// jwtClockSkew backdates the issued-at claim so a slightly-behind clock on

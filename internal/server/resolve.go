@@ -313,8 +313,7 @@ func (s *Server) handleResolve(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if req.PullRequestNumber != 0 {
-		guildChecked := req.GuildID != ""
-		if err := s.syncSetupComment(ctx, claims.Repository, req.PullRequestNumber, resp.Status, resp.SetupURL, guildChecked); err != nil {
+		if err := s.syncSetupComment(ctx, claims.Repository, req.PullRequestNumber, resp.Status, resp.SetupURL); err != nil {
 			s.logger.Error("syncing setup comment", "error", err)
 		}
 	}

@@ -11,7 +11,7 @@ import (
 const commentMarker = "<!-- arbiterer-setup-message -->"
 
 // commentMessage describes what a contributor needs to do next for a given resolve status.
-func commentMessage(status resolveStatus, setupURL string, guildChecked bool) string {
+func commentMessage(status resolveStatus, setupURL string) string {
 	switch status {
 	case statusLinked:
 		return "Your GitHub account is linked to your Discord account. No further action is needed."
@@ -44,14 +44,13 @@ func (s *Server) syncSetupComment(
 	pullRequestNumber int64,
 	status resolveStatus,
 	setupURL string,
-	guildChecked bool,
 ) error {
 	existing, err := s.githubClient.FindComment(ctx, repo, pullRequestNumber, commentMarker)
 	if err != nil {
 		return fmt.Errorf("finding comment: %w", err)
 	}
 
-	message := commentMessage(status, setupURL, guildChecked)
+	message := commentMessage(status, setupURL)
 
 	if status == statusLinked && (existing == nil || strings.Contains(existing.Body, message)) {
 		return nil

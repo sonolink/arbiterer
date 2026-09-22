@@ -351,7 +351,7 @@ func (s *Server) handleLinkDiscordCallback(w http.ResponseWriter, r *http.Reques
 	s.writeLinkCookie(w, "", -1)
 
 	if lc.PullRequestNumber != 0 {
-		if err := s.syncSetupComment(ctx, lc.Repository, lc.PullRequestNumber, statusLinked, "", false); err != nil {
+		if err := s.syncSetupComment(ctx, lc.Repository, lc.PullRequestNumber, statusLinked, ""); err != nil {
 			s.logger.Error("syncing setup comment", "error", err)
 		}
 	}

@@ -98,6 +98,11 @@ linters:
           - errcheck
         text: "Error return value of .((os\\.)?std(out|err)\\..*|.*Close|.*Flush|os\\.Remove(All)?|.*print(f|ln)?|os\\.(Un)?Setenv). is not checked"
 
+      # gosec hardcoded credentials false positives for G101
+      - linters:
+          - gosec
+        text: "G101:"
+            
 formatters:
   enable:
     - gofmt

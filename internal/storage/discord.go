@@ -91,7 +91,9 @@ func (s *Store) LinkGitHubDiscord(
 	if err != nil {
 		return fmt.Errorf("storage: link github discord: %w", err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() {
+		_ = tx.Rollback(ctx)
+	}()
 
 	const upsertUserQuery = `
 		INSERT INTO discord_users (id, encrypted_access_token, encrypted_refresh_token, token_expires_at)
