@@ -37,7 +37,7 @@ func NewVerifier(ctx context.Context, cfg config.GitHub) *Verifier {
 // Claims holds the parts of a verified token the application acts on.
 type Claims struct {
 	RepositoryID int64
-	Repository string
+	Repository   string
 }
 
 // tokenClaims mirrors the claims GitHub Actions puts in an OIDC token. Numeric ids
