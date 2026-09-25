@@ -36,15 +36,17 @@ func NewVerifier(ctx context.Context, cfg config.GitHub) *Verifier {
 
 // Claims holds the parts of a verified token the application acts on.
 type Claims struct {
-	RepositoryID int64
-	Repository   string
+	RepositoryID      int64
+	RepositoryOwnerID int64
+	Repository        string
 }
 
 // tokenClaims mirrors the claims GitHub Actions puts in an OIDC token. Numeric ids
 // arrive as strings.
 type tokenClaims struct {
-	RepositoryID string `json:"repository_id"`
-	Repository   string `json:"repository"`
+	RepositoryID      string `json:"repository_id"`
+	RepositoryOwnerID string `json:"repository_owner_id"`
+	Repository        string `json:"repository"`
 }
 
 func (tc tokenClaims) claims() (*Claims, error) {
@@ -53,11 +55,20 @@ func (tc tokenClaims) claims() (*Claims, error) {
 		return nil, fmt.Errorf("github: parsing repository id %q: %w", tc.RepositoryID, err)
 	}
 
+	ownerID, err := strconv.ParseInt(tc.RepositoryOwnerID, 10, 64)
+	if err != nil {
+		return nil, fmt.Errorf("github: parsing repository owner id %q: %w", tc.RepositoryOwnerID, err)
+	}
+
 	if tc.Repository == "" {
 		return nil, fmt.Errorf("github: token missing repository claim")
 	}
 
-	return &Claims{RepositoryID: repositoryID, Repository: tc.Repository}, nil
+	return &Claims{
+		RepositoryID:      repositoryID,
+		RepositoryOwnerID: ownerID,
+		Repository:        tc.Repository,
+	}, nil
 }
 
 // Verify checks a GitHub Actions OIDC token and returns the claims it carries.

@@ -1,6 +1,7 @@
 package config
 
 import (
+	"bytes"
 	"crypto/rsa"
 	"encoding/base64"
 	"fmt"
@@ -178,25 +179,36 @@ type Secrets struct {
 
 // GitHub holds the application settings used for OAuth and OIDC.
 type GitHub struct {
-	ClientID     string     `env:"GITHUB_CLIENT_ID,required"`
-	ClientSecret string     `env:"GITHUB_CLIENT_SECRET,required"`
-	PrivateKey   PrivateKey `env:"GITHUB_CLIENT_PRIVATE_KEY,required"`
-	RedirectURI  string     `env:"GITHUB_REDIRECT_URI,required"`
-	OIDCAudience string     `env:"GITHUB_OIDC_AUDIENCE,required"`
+	ClientID     string        `env:"GITHUB_CLIENT_ID,required"`
+	ClientSecret string        `env:"GITHUB_CLIENT_SECRET,required"`
+	PrivateKey   RSAPrivateKey `env:"GITHUB_CLIENT_PRIVATE_KEY,required"`
+	RedirectURI  string        `env:"GITHUB_REDIRECT_URI,required"`
+	OIDCAudience string        `env:"GITHUB_OIDC_AUDIENCE,required"`
 }
 
-// PrivateKey is a GitHub App's RSA private key, decoded from a PEM encoded
-// environment value.
-type PrivateKey rsa.PrivateKey
+// RSAPrivateKey is a GitHub App's RSA private key, decoded from a PEM encoded
+// environment value, optionally base64 encoded to keep it on a single line.
+type RSAPrivateKey rsa.PrivateKey
 
-// UnmarshalText parses a PEM encoded RSA private key.
-func (k *PrivateKey) UnmarshalText(text []byte) error {
-	key, err := jwt.ParseRSAPrivateKeyFromPEM(text)
+// UnmarshalText parses a PEM encoded RSA private key, base64 decoding it
+// first unless it already starts with a PEM header.
+func (k *RSAPrivateKey) UnmarshalText(text []byte) error {
+	pemBytes := bytes.TrimSpace(text)
+	if !bytes.HasPrefix(pemBytes, []byte("-----BEGIN")) {
+		decoded, err := base64.StdEncoding.DecodeString(string(pemBytes))
+		if err != nil {
+			return fmt.Errorf("invalid private key: not PEM and invalid base64: %w", err)
+		}
+
+		pemBytes = decoded
+	}
+
+	key, err := jwt.ParseRSAPrivateKeyFromPEM(pemBytes)
 	if err != nil {
 		return fmt.Errorf("invalid private key: %w", err)
 	}
 
-	*k = PrivateKey(*key)
+	*k = RSAPrivateKey(*key)
 
 	return nil
 }

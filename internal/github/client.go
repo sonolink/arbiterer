@@ -5,10 +5,10 @@ import (
 	"context"
 	"crypto/rsa"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
-	"sync"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -25,28 +25,15 @@ const (
 	jwtLifetime = 9 * time.Minute
 
 	// jwtClockSkew backdates the issued-at claim so a slightly-behind clock on
-	// GitHub's side still accepts the token, per GitHub's recommendation:
-	// https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/generating-a-json-web-token-jwt-for-a-github-app
+	// GitHub's side still accepts the token.
 	jwtClockSkew = 60 * time.Second
-
-	// installTokenSkew treats a cached installation token as expired this
-	// long before it actually is, so a request never races the real expiry.
-	installTokenSkew = time.Minute
 )
 
 // Client talks to GitHub using the given application credentials.
 type Client struct {
 	cfg        config.GitHub
+	appSlug    appSlug
 	httpClient *http.Client
-
-	mu     sync.Mutex
-	tokens map[string]cachedToken
-}
-
-// cachedToken is an installation access token, valid until expiresAt.
-type cachedToken struct {
-	token     string
-	expiresAt time.Time
 }
 
 // NewClient builds a Client from a GitHub configuration.
@@ -54,13 +41,11 @@ func NewClient(cfg config.GitHub) *Client {
 	return &Client{
 		cfg:        cfg,
 		httpClient: &http.Client{Timeout: 10 * time.Second},
-		tokens:     make(map[string]cachedToken),
 	}
 }
 
-// appJWT signs a short-lived JWT identifying the app itself, used only to
-// look up installations and mint installation tokens.
-func (c *Client) appJWT() (string, error) {
+// generateJWT signs a short-lived JWT identifying the app itself.
+func (c *Client) generateJWT() (string, error) {
 	now := time.Now()
 	claims := jwt.RegisteredClaims{
 		Issuer:    c.cfg.ClientID,
@@ -77,18 +62,10 @@ func (c *Client) appJWT() (string, error) {
 	return signed, nil
 }
 
-// installationToken returns a token the app can use to act on repo ("owner/repo"),
-// minting and caching a fresh one when none is cached or it is close to expiring.
-func (c *Client) installationToken(ctx context.Context, repo string) (string, error) {
-	c.mu.Lock()
-	cached, ok := c.tokens[repo]
-	c.mu.Unlock()
-
-	if ok && time.Until(cached.expiresAt) > installTokenSkew {
-		return cached.token, nil
-	}
-
-	appJWT, err := c.appJWT()
+// CreateInstallationToken creates an installation token that can only act on
+// the given repository.
+func (c *Client) CreateInstallationToken(ctx context.Context, repositoryID int64, repo string) (string, error) {
+	appJWT, err := c.generateJWT()
 	if err != nil {
 		return "", err
 	}
@@ -96,7 +73,7 @@ func (c *Client) installationToken(ctx context.Context, repo string) (string, er
 	var installation struct {
 		ID int64 `json:"id"`
 	}
-	if err := c.doJSON(
+	if err := c.sendRequest(
 		ctx,
 		http.MethodGet,
 		fmt.Sprintf("/repos/%s/installation", repo),
@@ -104,27 +81,27 @@ func (c *Client) installationToken(ctx context.Context, repo string) (string, er
 		nil,
 		&installation,
 	); err != nil {
-		return "", fmt.Errorf("github: finding installation: %w", err)
+		var apiErr *APIError
+		if errors.As(err, &apiErr) && apiErr.Status == http.StatusNotFound {
+			return "", fmt.Errorf("%w: %s", ErrAppNotInstalled, repo)
+		}
+
+		return "", fmt.Errorf("github: fetching installation: %w", err)
 	}
 
 	var access struct {
-		Token     string    `json:"token"`
-		ExpiresAt time.Time `json:"expires_at"`
+		Token string `json:"token"`
 	}
-	if err := c.doJSON(
+	if err := c.sendRequest(
 		ctx,
 		http.MethodPost,
 		fmt.Sprintf("/app/installations/%d/access_tokens", installation.ID),
 		appJWT,
-		nil,
+		map[string][]int64{"repository_ids": {repositoryID}},
 		&access,
 	); err != nil {
-		return "", fmt.Errorf("github: minting installation token: %w", err)
+		return "", fmt.Errorf("github: creating installation token: %w", err)
 	}
-
-	c.mu.Lock()
-	c.tokens[repo] = cachedToken{token: access.Token, expiresAt: access.ExpiresAt}
-	c.mu.Unlock()
 
 	return access.Token, nil
 }
@@ -183,19 +160,8 @@ func readBody(resp *http.Response) ([]byte, error) {
 	return body, nil
 }
 
-// doInstallationJSON sends a JSON request to the GitHub API, authorized
-// as the app's installation on repo, and decodes a JSON response into outn.
-func (c *Client) doInstallationJSON(ctx context.Context, method, repo, path string, body, out any) error {
-	token, err := c.installationToken(ctx, repo)
-	if err != nil {
-		return err
-	}
-
-	return c.doJSON(ctx, method, path, token, body, out)
-}
-
-// doJSON sends a JSON request, authorized with token to the GitHub REST API and decodes a JSON response into out.
-func (c *Client) doJSON(ctx context.Context, method, path, token string, body, out any) error {
+// sendRequest sends a request to the GitHub REST API authorized with token.
+func (c *Client) sendRequest(ctx context.Context, method, path, token string, body, out any) error {
 	var reqBody io.Reader
 	if body != nil {
 		b, err := json.Marshal(body)
