@@ -247,7 +247,7 @@ func (s *Server) handleLinkGitHubCallback(w http.ResponseWriter, r *http.Request
 			lc.RepositoryID,
 			lc.Repository,
 			lc.PullRequestNumber,
-			statusGitHubVerified,
+			commentGitHubVerified,
 			discordStepURL,
 		); err != nil {
 			s.logSetupCommentError(err)
@@ -395,7 +395,7 @@ func (s *Server) handleLinkDiscordCallback(w http.ResponseWriter, r *http.Reques
 	s.writeLinkCookie(w, "", -1)
 
 	if lc.PullRequestNumber != 0 {
-		if err := s.syncSetupComment(ctx, lc.RepositoryID, lc.Repository, lc.PullRequestNumber, statusLinked, ""); err != nil {
+		if err := s.syncSetupComment(ctx, lc.RepositoryID, lc.Repository, lc.PullRequestNumber, commentLinked, ""); err != nil {
 			s.logSetupCommentError(err)
 		}
 	}

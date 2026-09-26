@@ -17,21 +17,30 @@ type setupStep struct {
 	done bool
 }
 
-// statusGitHubVerified is a comment-only status for a contributor who signed in
-// with GitHub but has not yet authorized Discord. It is never served by resolve.
-const statusGitHubVerified resolveStatus = "github_verified"
+// commentStatus is the status the setup comment reports to a contributor.
+type commentStatus string
+
+const (
+	// commentGitHubVerified marks a contributor who signed in with GitHub but
+	// has not yet authorized Discord. It is never served by resolve.
+	commentGitHubVerified commentStatus = "github_verified"
+
+	commentLinked     commentStatus = "linked"
+	commentRevoked    commentStatus = "revoked"
+	commentNotAMember commentStatus = "not_a_member"
+)
 
 // setupSteps lists the steps for linking a contributor's accounts, linking the
 // next step to take with linkURL.
-func setupSteps(status resolveStatus, linkURL string) []setupStep {
+func setupSteps(status commentStatus, linkURL string) []setupStep {
 	signInGitHub := setupStep{text: "Sign in with GitHub"}
 	signInDiscord := setupStep{text: "Sign in with Discord"}
 
 	switch status {
-	case statusLinked:
+	case commentLinked:
 		signInGitHub.done = true
 		signInDiscord.done = true
-	case statusGitHubVerified:
+	case commentGitHubVerified, commentRevoked:
 		signInGitHub.done = true
 		signInDiscord.text = fmt.Sprintf("[%s](%s)", signInDiscord.text, linkURL)
 	default:
@@ -43,15 +52,15 @@ func setupSteps(status resolveStatus, linkURL string) []setupStep {
 
 // formatCommentBody renders the setup comment for a contributor in the given
 // status, with completed steps struck through.
-func formatCommentBody(author string, status resolveStatus, linkURL string) string {
+func formatCommentBody(author string, status commentStatus, linkURL string) string {
 	var b strings.Builder
 
 	b.WriteString("@" + author + ", ")
 
 	switch status {
-	case statusLinked:
+	case commentLinked:
 		b.WriteString("your GitHub and Discord accounts are linked.")
-	case statusRevoked:
+	case commentRevoked:
 		b.WriteString("your Discord link has expired or was revoked. Please follow these steps to link it again:")
 	default:
 		b.WriteString("please follow these steps to continue:")
@@ -74,9 +83,9 @@ func formatCommentBody(author string, status resolveStatus, linkURL string) stri
 // setupCommentNeedsWrite reports whether the setup comment has to be posted or
 // updated. A linked contributor needs no comment unless an earlier one asked
 // them to act, and a comment without a link to refresh only changes with the status.
-func setupCommentNeedsWrite(stored *storage.SetupComment, status resolveStatus, linkURL string) bool {
+func setupCommentNeedsWrite(stored *storage.SetupComment, status commentStatus, linkURL string) bool {
 	if stored == nil {
-		return status != statusLinked
+		return status != commentLinked
 	}
 
 	return stored.Status != string(status) || linkURL != ""
@@ -89,13 +98,13 @@ func (s *Server) syncSetupComment(
 	repositoryID int64,
 	repo string,
 	pullRequestNumber int64,
-	status resolveStatus,
+	status commentStatus,
 	linkURL string,
 ) error {
 	// The comment only covers linking. Whatever else maintainers require, such
 	// as server membership, is theirs to report.
-	if status == statusNotAMember {
-		status = statusLinked
+	if status == commentNotAMember {
+		status = commentLinked
 	}
 
 	stored, err := s.store.SetupCommentByPullRequest(ctx, repositoryID, pullRequestNumber)
@@ -133,7 +142,7 @@ func (s *Server) syncSetupComment(
 		commentDeleted := errors.As(err, &apiErr) && apiErr.Status == http.StatusNotFound
 
 		switch {
-		case err == nil, commentDeleted && status == statusLinked:
+		case err == nil, commentDeleted && status == commentLinked:
 			return s.store.SaveSetupComment(ctx, comment)
 		case !commentDeleted:
 			return fmt.Errorf("updating comment: %w", err)
