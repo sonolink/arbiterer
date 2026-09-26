@@ -33,8 +33,8 @@ type tokenResponse struct {
 	ErrorDescription string `json:"error_description"`
 }
 
-// Exchange swaps an authorization code for an access token.
-func (c *Client) Exchange(ctx context.Context, code string) (string, error) {
+// ExchangeCode swaps an OAuth authorization code for an access token.
+func (c *Client) ExchangeCode(ctx context.Context, code string) (string, error) {
 	form := url.Values{
 		"client_id":     {c.cfg.ClientID},
 		"client_secret": {c.cfg.ClientSecret},

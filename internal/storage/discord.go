@@ -84,10 +84,49 @@ func (s *Store) UpdateDiscordUserTokens(ctx context.Context, user *DiscordUser) 
 func (s *Store) LinkGitHubDiscord(
 	ctx context.Context,
 	githubUserID string,
-	discordUserID int64,
 	repositoryID int64,
 	user *DiscordUser,
 ) error {
-	// TODO: implement
-	panic("not implemented")
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("storage: link github discord: %w", err)
+	}
+	defer func() {
+		_ = tx.Rollback(ctx)
+	}()
+
+	const upsertUserQuery = `
+		INSERT INTO discord_users (id, encrypted_access_token, encrypted_refresh_token, token_expires_at)
+		VALUES ($1, $2, $3, $4)
+		ON CONFLICT (id) DO UPDATE
+		SET encrypted_access_token = EXCLUDED.encrypted_access_token,
+			encrypted_refresh_token = EXCLUDED.encrypted_refresh_token,
+			token_expires_at = EXCLUDED.token_expires_at
+	`
+	if _, err := tx.Exec(
+		ctx,
+		upsertUserQuery,
+		user.ID,
+		user.EncryptedAccessToken,
+		user.EncryptedRefreshToken,
+		user.TokenExpiresAt,
+	); err != nil {
+		return fmt.Errorf("storage: link github discord: %w", err)
+	}
+
+	const upsertConnectionQuery = `
+		INSERT INTO github_discord_connections (github_user_id, discord_user_id, repository_id)
+		VALUES ($1, $2, $3)
+		ON CONFLICT (github_user_id, repository_id) DO UPDATE
+		SET discord_user_id = EXCLUDED.discord_user_id
+	`
+	if _, err := tx.Exec(ctx, upsertConnectionQuery, githubUserID, user.ID, repositoryID); err != nil {
+		return fmt.Errorf("storage: link github discord: %w", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("storage: link github discord: %w", err)
+	}
+
+	return nil
 }

@@ -1,3 +1,2 @@
-// Package github talks to GitHub: it drives the OAauth login flow
-// for linking a contributor's account, and verifies OIDC tokens from actions.
+// Package github handles the application's interactions with GitHub.
 package github
