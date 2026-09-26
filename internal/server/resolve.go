@@ -19,7 +19,7 @@ import (
 type resolveRequest struct {
 	GitHubUserID      string `json:"github_user_id"`
 	GuildID           string `json:"guild_id"`
-	PullRequestNumber int64  `json:"issue_number"`
+	PullRequestNumber int64  `json:"issue_number"` // GitHub's API addresses PRs as issues.
 }
 
 type resolveStatus string

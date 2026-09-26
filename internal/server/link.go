@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -241,7 +242,8 @@ func (s *Server) handleLinkGitHubCallback(w http.ResponseWriter, r *http.Request
 	}
 
 	if lc.PullRequestNumber != 0 {
-		discordStepURL := strings.TrimSuffix(s.cfg.PublicURL, "/") + "/link/discord"
+		discordPath := url.URL{Path: "/link/discord"}
+		discordStepURL := strings.TrimSuffix(s.cfg.PublicURL, "/") + discordPath.RequestURI()
 		if err := s.syncSetupComment(
 			ctx,
 			lc.RepositoryID,
