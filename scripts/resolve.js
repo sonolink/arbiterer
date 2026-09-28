@@ -83,22 +83,20 @@ module.exports = async function resolve({ core, context }) {
  */
 async function reportMissingApp({ core, installUrl, fail }) {
   const title = 'Arbiterer GitHub App not installed';
-  const message =
+  const reason =
     'The Arbiterer GitHub App is not installed on this repository, so it could not post the setup comment ' +
-    `for the pull request author. A maintainer can install it here: ${installUrl}`;
+    'telling the pull request author how to link their accounts.';
 
   await core.summary
     .addHeading(title, 3)
-    .addRaw(
-      'The Arbiterer GitHub App is not installed on this repository, so it could not post the setup comment ' +
-      'telling the pull request author how to link their accounts.',
-      true,
-    )
+    .addRaw(reason, true)
     .addLink('Install the Arbiterer GitHub App', installUrl)
     .write();
 
+  const message = `${reason} A maintainer can install it here: ${installUrl}`;
   if (fail) {
-    core.setFailed(message);
+    core.error(message, { title });
+    process.exitCode = 1;
   } else {
     core.warning(message, { title });
   }
