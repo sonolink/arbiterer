@@ -8,7 +8,7 @@ inputs:
   server-url:
     description: Base URL of the server to call, including any path prefix (e.g. /v1).
     required: false
-    defualt: "https://api.arbiterer.com/v1"
+    default: "https://api.arbiterer.com/v1"
   fail-on-missing-app:
     description: Fail the step when the Arbiterer GitHub App is not installed on the repository, instead of only warning.
       Without the app, Arbiterer cannot post the setup comment telling the pull request author how to link their accounts.
