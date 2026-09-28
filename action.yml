@@ -7,20 +7,6 @@ inputs:
     description: Discord server ID to check membership in. Omit to check only the account link. The result will include a
       GuildMember object if the user is a member of the server.
     required: false
-  server-url:
-    description: Base URL of the server to call, including any path prefix (e.g. /v1).
-    required: false
-    default: "https://api.arbiterer.com/v1"
-  oidc-audience:
-    description: OIDC audience to use when requesting the OIDC token. This must match the audience configured on the
-      server.
-    required: false
-    default: "https://arbiterer.com"
-  error-max-retries:
-    description: Number of times, from 0 to 10, to retry the request after the first attempt when the server returns
-      a 500, 502, 503 or 504 error, or the request fails or times out. Set to 0 to disable retries.
-    required: false
-    default: 3
   fail-on-missing-app:
     description: Fail the step when the Arbiterer GitHub App is not installed on the repository, instead of only warning.
       Without the app, Arbiterer cannot post the setup comment telling the pull request author how to link their accounts.
@@ -44,11 +30,8 @@ runs:
       uses: actions/github-script@v7
       env:
         ARBITERER_ACTION_PATH: ${{ github.action_path }}
-        ARBITERER_SERVER_URL: ${{ inputs.server-url }}
-        ARBITERER_OIDC_AUDIENCE: ${{ inputs.oidc-audience }}
         ARBITERER_GUILD_ID: ${{ inputs.guild-id }}
         ARBITERER_FAIL_ON_MISSING_APP: ${{ inputs.fail-on-missing-app }}
-        ARBITERER_ERROR_MAX_RETRIES: ${{ inputs.error-max-retries }}
 
       with:
         script: |

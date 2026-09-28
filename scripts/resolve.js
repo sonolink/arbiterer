@@ -1,27 +1,24 @@
-const audience = process.env.ARBITERER_OIDC_AUDIENCE?.trim();
-const serverUrl = process.env.ARBITERER_SERVER_URL?.trim();
-const guildId = process.env.ARBITERER_GUILD_ID?.trim() || undefined;
+const audience = process.env.ARBITERER_OIDC_AUDIENCE?.trim() || 'https://arbiterer.com';
+const serverUrl = process.env.ARBITERER_SERVER_URL?.trim() || 'https://api.arbiterer.com/v1';
+const maxRetries = Number(process.env.ARBITERER_ERROR_MAX_RETRIES?.trim() || 3);
 const failOnMissingApp = process.env.ARBITERER_FAIL_ON_MISSING_APP?.trim().toLowerCase() === 'true';
-const maxRetries = Number(process.env.ARBITERER_ERROR_MAX_RETRIES?.trim() || NaN);
 
-if (!audience || !serverUrl) {
-  throw new Error('The action maintainer must configure the OIDC audience and server URL in the environment variables.');
-}
+const guildId = process.env.ARBITERER_GUILD_ID?.trim() || undefined;
 
 let endpoint;
 try {
   endpoint = new URL(`${serverUrl.replace(/\/$/, '')}/resolve`);
 } catch {
-  throw new Error(`server-url is not a valid URL: ${serverUrl}`);
+  throw new Error(`ARBITERER_SERVER_URL is not a valid URL: ${serverUrl}`);
 }
 
 const maxRetriesLimit = 10;
 if (!Number.isInteger(maxRetries) || maxRetries < 0 || maxRetries > maxRetriesLimit) {
-  throw new Error(`error-max-retries must be an integer between 0 and ${maxRetriesLimit}.`);
+  throw new Error(`ARBITERER_ERROR_MAX_RETRIES must be an integer between 0 and ${maxRetriesLimit}.`);
 }
+
 const retryableStatuses = new Set([500, 502, 503, 504]);
 const maxAttempts = 1 + maxRetries;
-
 const retryDelayBaseMs = 1000; // 1 second
 const retryDelayMaxMs = 30000; // 30 seconds
 const timeoutMs = 30000; // 30 seconds
