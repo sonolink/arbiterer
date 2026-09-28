@@ -1,0 +1,198 @@
+package server
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"net/http"
+	"strings"
+
+	"github.com/sonolink/arbiterer/internal/github"
+	"github.com/sonolink/arbiterer/internal/storage"
+)
+
+// setupStep is one step a contributor has to complete before the check passes.
+type setupStep struct {
+	text string
+	done bool
+}
+
+// commentStatus is the status the setup comment reports to the PR author.
+type commentStatus string
+
+const (
+	// commentGitHubVerified marks a contributor who signed in with GitHub but
+	// has not yet authorized Discord. It is never served by resolve.
+	commentGitHubVerified commentStatus = "github_verified"
+
+	commentUnlinked   commentStatus = "unlinked"
+	commentLinked     commentStatus = "linked"
+	commentRevoked    commentStatus = "revoked"
+	commentNotAMember commentStatus = "not_a_member"
+)
+
+// commentStatusFor returns the setup comment status matching a resolve status.
+func commentStatusFor(status resolveStatus) commentStatus {
+	switch status {
+	case statusLinked:
+		return commentLinked
+	case statusRevoked:
+		return commentRevoked
+	case statusNotAMember:
+		return commentNotAMember
+	default:
+		return commentUnlinked
+	}
+}
+
+// setupSteps lists the steps a contributor has to complete, linking the next
+// step to take with linkURL. Joining the server is only listed when the check
+// requires membership, and it is done once resolve has confirmed it.
+func setupSteps(status commentStatus, linkURL string, requiresMembership bool) []setupStep {
+	signInGitHub := setupStep{text: "Sign in with GitHub"}
+	signInDiscord := setupStep{text: "Sign in with Discord"}
+	joinServer := setupStep{text: "Join the required Discord server"}
+
+	switch status {
+	case commentLinked:
+		signInGitHub.done = true
+		signInDiscord.done = true
+		joinServer.done = true
+	case commentNotAMember:
+		signInGitHub.done = true
+		signInDiscord.done = true
+	case commentGitHubVerified, commentRevoked:
+		signInGitHub.done = true
+		signInDiscord.text = fmt.Sprintf("[%s](%s)", signInDiscord.text, linkURL)
+	default:
+		signInGitHub.text = fmt.Sprintf("[%s](%s)", signInGitHub.text, linkURL)
+	}
+
+	steps := []setupStep{signInGitHub, signInDiscord}
+	if requiresMembership {
+		steps = append(steps, joinServer)
+	}
+
+	return steps
+}
+
+// formatCommentBody renders the setup comment for a contributor in the given
+// status, with completed steps struck through.
+func formatCommentBody(author string, status commentStatus, linkURL string, requiresMembership bool) string {
+	var b strings.Builder
+
+	b.WriteString("@" + author + ", ")
+
+	switch status {
+	case commentLinked:
+		b.WriteString("your GitHub and Discord accounts are linked.")
+	case commentNotAMember:
+		b.WriteString("your GitHub and Discord accounts are linked. " +
+			"Please join the required Discord server, then re-run the check:")
+	case commentRevoked:
+		b.WriteString("your Discord link has expired or was revoked. Please follow these steps to link it again:")
+	default:
+		b.WriteString("please follow these steps to continue:")
+	}
+
+	b.WriteString("\n")
+
+	for i, step := range setupSteps(status, linkURL, requiresMembership) {
+		text := step.text
+		if step.done {
+			text = "~~" + text + "~~"
+		}
+
+		fmt.Fprintf(&b, "\n%d. %s", i+1, text)
+	}
+
+	return b.String()
+}
+
+// setupCommentNeedsWrite reports whether the setup comment has to be posted or
+// updated. A linked contributor needs no comment unless an earlier one asked
+// them to act, and a comment without a link to refresh only changes with the status.
+func setupCommentNeedsWrite(stored *storage.SetupComment, status commentStatus, linkURL string) bool {
+	if stored == nil {
+		return status != commentLinked
+	}
+
+	return stored.Status != string(status) || linkURL != ""
+}
+
+// syncSetupComment reconciles the comment telling a contributor what they
+// need to do. It does nothing outside a pull request. requiresMembership adds
+// the step of joining the check's Discord server.
+func (s *Server) syncSetupComment(
+	ctx context.Context,
+	repositoryID int64,
+	repo string,
+	issueNumber int64,
+	status commentStatus,
+	linkURL string,
+	requiresMembership bool,
+) error {
+	if issueNumber == 0 {
+		return nil
+	}
+
+	stored, err := s.store.SetupCommentByPullRequest(ctx, repositoryID, issueNumber)
+	if err != nil && !errors.Is(err, storage.ErrNotFound) {
+		return fmt.Errorf("looking up setup comment: %w", err)
+	}
+
+	if !setupCommentNeedsWrite(stored, status, linkURL) {
+		return nil
+	}
+
+	token, err := s.githubClient.CreateInstallationToken(ctx, repositoryID, repo)
+	if err != nil {
+		return fmt.Errorf("creating installation token: %w", err)
+	}
+
+	author, err := s.githubClient.FetchIssueAuthor(ctx, token, repo, issueNumber)
+	if err != nil {
+		return fmt.Errorf("fetching issue author (%d): %w", issueNumber, err)
+	}
+
+	body := formatCommentBody(author.Login, status, linkURL, requiresMembership)
+	comment := &storage.SetupComment{
+		RepositoryID: repositoryID,
+		IssueNumber:  issueNumber,
+		Status:       string(status),
+	}
+
+	if stored != nil {
+		comment.CommentID = stored.CommentID
+
+		err := s.githubClient.UpdateComment(ctx, token, repo, stored.CommentID, body)
+
+		var apiErr *github.APIError
+		commentDeleted := errors.As(err, &apiErr) && apiErr.Status == http.StatusNotFound
+
+		switch {
+		case err == nil, commentDeleted && status == commentLinked:
+			return s.store.UpsertSetupComment(ctx, comment)
+		case !commentDeleted:
+			return fmt.Errorf("updating comment: %w", err)
+		}
+	}
+
+	comment.CommentID, err = s.githubClient.CreateComment(ctx, token, repo, issueNumber, body)
+	if err != nil {
+		return fmt.Errorf("creating comment: %w", err)
+	}
+
+	return s.store.UpsertSetupComment(ctx, comment)
+}
+
+// logSetupCommentError logs a failed comment sync. A missing app installation
+// is the repository's setup to fix, not a server fault, so it only warns.
+func (s *Server) logSetupCommentError(err error) {
+	if errors.Is(err, github.ErrAppNotInstalled) {
+		s.logger.Warn("skipping setup comment", "error", err)
+		return
+	}
+
+	s.logger.Error("syncing setup comment", "error", err)
+}

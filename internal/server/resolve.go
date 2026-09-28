@@ -12,12 +12,14 @@ import (
 	"time"
 
 	"github.com/sonolink/arbiterer/internal/discord"
+	"github.com/sonolink/arbiterer/internal/github"
 	"github.com/sonolink/arbiterer/internal/storage"
 )
 
 type resolveRequest struct {
 	GitHubUserID string `json:"github_user_id"`
 	GuildID      string `json:"guild_id"`
+	IssueNumber  int64  `json:"issue_number"` // GitHub's API addresses PRs as issues.
 }
 
 type resolveStatus string
@@ -30,17 +32,21 @@ const (
 )
 
 type resolveResponse struct {
-	Status   resolveStatus   `json:"status"`
-	Member   json.RawMessage `json:"member,omitempty"`
-	SetupURL string          `json:"setup_url,omitempty"`
+	Status  resolveStatus   `json:"status"`
+	Member  json.RawMessage `json:"member,omitempty"`
+	LinkURL string          `json:"link_url,omitempty"`
+
+	// AppInstallURL is set when the app is not installed on the repository, so
+	// it could not post the setup comment.
+	AppInstallURL string `json:"app_install_url,omitempty"`
 }
 
-// setupURL builds the link a contributor follows to connect their accounts,
+// linkURL builds the link a contributor follows to connect their accounts,
 // carrying a sealed, short-lived bearer token.
-func (s *Server) setupURL(githubUserID string, repositoryID int64) (string, error) {
-	token, err := s.sealLinkToken(githubUserID, repositoryID)
+func (s *Server) linkURL(lt linkToken) (string, error) {
+	token, err := s.sealLinkToken(lt)
 	if err != nil {
-		return "", fmt.Errorf("building setup url: %w", err)
+		return "", fmt.Errorf("building link url: %w", err)
 	}
 
 	u := url.URL{
@@ -88,7 +94,7 @@ const (
 
 func (s *Server) accessToken(ctx context.Context, user *storage.DiscordUser) (string, error) {
 	if time.Until(user.TokenExpiresAt) > refreshSkew {
-		accessToken, err := s.tokenSealer.Open(
+		accessToken, err := s.storageSealer.Open(
 			user.EncryptedAccessToken,
 			tokenAAD(user.ID, aadFieldAccess),
 		)
@@ -99,7 +105,7 @@ func (s *Server) accessToken(ctx context.Context, user *storage.DiscordUser) (st
 		return string(accessToken), nil
 	}
 
-	refreshToken, err := s.tokenSealer.Open(
+	refreshToken, err := s.storageSealer.Open(
 		user.EncryptedRefreshToken,
 		tokenAAD(user.ID, aadFieldRefresh),
 	)
@@ -120,7 +126,7 @@ func (s *Server) accessToken(ctx context.Context, user *storage.DiscordUser) (st
 		return "", fmt.Errorf("refreshing token: %w", err)
 	}
 
-	sealedAccessToken, err := s.tokenSealer.Seal(
+	sealedAccessToken, err := s.storageSealer.Seal(
 		[]byte(token.AccessToken),
 		tokenAAD(user.ID, aadFieldAccess),
 	)
@@ -128,7 +134,7 @@ func (s *Server) accessToken(ctx context.Context, user *storage.DiscordUser) (st
 		return "", fmt.Errorf("sealing access token: %w", err)
 	}
 
-	sealedRefreshToken, err := s.tokenSealer.Seal(
+	sealedRefreshToken, err := s.storageSealer.Seal(
 		[]byte(token.RefreshToken),
 		tokenAAD(user.ID, aadFieldRefresh),
 	)
@@ -197,20 +203,18 @@ loop:
 func (s *Server) resolveMember(
 	ctx context.Context,
 	user *storage.DiscordUser,
-	guildID string,
-	githubUserID string,
-	repositoryID int64,
+	lt linkToken,
 ) (resolveResponse, error) {
 	accessToken, err := s.accessToken(ctx, user)
 	if err != nil {
 		if errors.Is(err, errReauthRequired) {
-			return s.revokedResponse(githubUserID, repositoryID)
+			return s.revokedResponse(lt)
 		}
 
 		return resolveResponse{}, err
 	}
 
-	member, err := s.discordClient.GuildMember(ctx, accessToken, guildID)
+	member, err := s.discordClient.GuildMember(ctx, accessToken, lt.GuildID)
 	if err == nil {
 		return resolveResponse{Status: statusLinked, Member: member}, nil
 	}
@@ -222,7 +226,7 @@ func (s *Server) resolveMember(
 
 	switch apiErr.Status {
 	case http.StatusUnauthorized:
-		return s.revokedResponse(githubUserID, repositoryID)
+		return s.revokedResponse(lt)
 	case http.StatusNotFound:
 		return resolveResponse{Status: statusNotAMember}, nil
 	default:
@@ -232,15 +236,15 @@ func (s *Server) resolveMember(
 
 // revokedResponse builds the response served when a Discord grant is unusable,
 // pointing the user at the linking flow.
-func (s *Server) revokedResponse(githubUserID string, repositoryID int64) (resolveResponse, error) {
-	setupURL, err := s.setupURL(githubUserID, repositoryID)
+func (s *Server) revokedResponse(lt linkToken) (resolveResponse, error) {
+	linkURL, err := s.linkURL(lt)
 	if err != nil {
 		return resolveResponse{}, err
 	}
 
 	return resolveResponse{
-		Status:   statusRevoked,
-		SetupURL: setupURL,
+		Status:  statusRevoked,
+		LinkURL: linkURL,
 	}, nil
 }
 
@@ -276,38 +280,74 @@ func (s *Server) handleResolve(w http.ResponseWriter, r *http.Request) {
 		req.GitHubUserID,
 		claims.RepositoryID,
 	)
-	if errors.Is(err, storage.ErrNotFound) {
-		setupURL, err := s.setupURL(req.GitHubUserID, claims.RepositoryID)
+
+	lt := linkToken{
+		GitHubUserID: req.GitHubUserID,
+		RepositoryID: claims.RepositoryID,
+		Repository:   claims.Repository,
+		IssueNumber:  req.IssueNumber,
+		GuildID:      req.GuildID,
+	}
+
+	var resp resolveResponse
+
+	switch {
+	case errors.Is(err, storage.ErrNotFound):
+		linkURL, err := s.linkURL(lt)
 		if err != nil {
-			s.logger.Error("building setup url", "error", err)
+			s.logger.Error("building link url", "error", err)
 			s.writeProblem(w, r, http.StatusInternalServerError, "internal error")
 			return
 		}
 
-		s.writeJSON(w, http.StatusOK, resolveResponse{
-			Status:   statusUnlinked,
-			SetupURL: setupURL,
-		})
-		return
-	}
-
-	if err != nil {
+		resp = resolveResponse{
+			Status:  statusUnlinked,
+			LinkURL: linkURL,
+		}
+	case err != nil:
 		s.logger.Error("looking up connection", "error", err)
 		s.writeProblem(w, r, http.StatusInternalServerError, "internal error")
+
 		return
+	case req.GuildID == "":
+		resp = resolveResponse{Status: statusLinked}
+	default:
+		resp, err = s.resolveMember(ctx, user, lt)
+		if err != nil {
+			s.logger.Error("resolving member", "error", err)
+			s.writeProblem(w, r, http.StatusInternalServerError, "internal error")
+
+			return
+		}
 	}
 
-	if req.GuildID == "" {
-		s.writeJSON(w, http.StatusOK, resolveResponse{Status: statusLinked})
-		return
-	}
+	if err := s.syncSetupComment(
+		ctx,
+		claims.RepositoryID,
+		claims.Repository,
+		req.IssueNumber,
+		commentStatusFor(resp.Status),
+		resp.LinkURL,
+		req.GuildID != "",
+	); err != nil {
+		s.logSetupCommentError(err)
 
-	resp, err := s.resolveMember(ctx, user, req.GuildID, req.GitHubUserID, claims.RepositoryID)
-	if err != nil {
-		s.logger.Error("resolving member", "error", err)
-		s.writeProblem(w, r, http.StatusInternalServerError, "internal error")
-		return
+		if errors.Is(err, github.ErrAppNotInstalled) {
+			resp.AppInstallURL = s.appInstallURL(ctx, claims)
+		}
 	}
 
 	s.writeJSON(w, http.StatusOK, resp)
+}
+
+// appInstallURL returns the page where a maintainer installs the app on the
+// token's repository, or an empty string when it cannot be built.
+func (s *Server) appInstallURL(ctx context.Context, claims *github.Claims) string {
+	installURL, err := s.githubClient.InstallURL(ctx, claims.RepositoryOwnerID, claims.RepositoryID)
+	if err != nil {
+		s.logger.Error("building app install url", "error", err)
+		return ""
+	}
+
+	return installURL
 }
