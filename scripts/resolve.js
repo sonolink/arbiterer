@@ -1,9 +1,30 @@
 const audience = process.env.ARBITERER_OIDC_AUDIENCE?.trim();
 const serverUrl = process.env.ARBITERER_SERVER_URL?.trim();
+const guildId = process.env.ARBITERER_GUILD_ID?.trim() || undefined;
+const failOnMissingApp = process.env.ARBITERER_FAIL_ON_MISSING_APP?.trim().toLowerCase() === 'true';
+const maxRetries = Number(process.env.ARBITERER_ERROR_MAX_RETRIES?.trim() || NaN);
 
 if (!audience || !serverUrl) {
   throw new Error('The action maintainer must configure the OIDC audience and server URL in the environment variables.');
 }
+
+let endpoint;
+try {
+  endpoint = new URL(`${serverUrl.replace(/\/$/, '')}/resolve`);
+} catch {
+  throw new Error(`server-url is not a valid URL: ${serverUrl}`);
+}
+
+const maxRetriesLimit = 10;
+if (!Number.isInteger(maxRetries) || maxRetries < 0 || maxRetries > maxRetriesLimit) {
+  throw new Error(`error-max-retries must be an integer between 0 and ${maxRetriesLimit}.`);
+}
+const retryableStatuses = new Set([500, 502, 503, 504]);
+const maxAttempts = 1 + maxRetries;
+
+const retryDelayBaseMs = 1000; // 1 second
+const retryDelayMaxMs = 30000; // 30 seconds
+const timeoutMs = 30000; // 30 seconds
 
 /**
  * @param {Object} options
@@ -12,8 +33,6 @@ if (!audience || !serverUrl) {
  * @returns {Promise<void>}
  */
 module.exports = async function resolve({ core, context }) {
-  const guildId = process.env.ARBITERER_GUILD_ID?.trim() || undefined;
-  const failOnMissingApp = process.env.ARBITERER_FAIL_ON_MISSING_APP?.trim().toLowerCase() === 'true';
   const userId = context.payload.pull_request
     ? context.payload.pull_request.user?.id
     : context.payload.sender?.id;
@@ -23,24 +42,54 @@ module.exports = async function resolve({ core, context }) {
     throw new Error('Cannot determine the GitHub user ID from the workflow event.');
   }
 
-  const endpoint = new URL(`${serverUrl.replace(/\/$/, '')}/resolve`);
-
   const oidcToken = await core.getIDToken(audience);
 
-  const response = await fetch(endpoint, {
-    method: 'POST',
-    redirect: 'error',
-    headers: {
-      Authorization: `Bearer ${oidcToken}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      github_user_id: String(userId),
-      ...(guildId ? { guild_id: guildId } : {}),
-      ...(issueNumber ? { issue_number: issueNumber } : {}),
-    }),
-    signal: AbortSignal.timeout(30000),
+  const body = JSON.stringify({
+    github_user_id: String(userId),
+    ...(guildId ? { guild_id: guildId } : {}),
+    ...(issueNumber ? { issue_number: issueNumber } : {}),
   });
+
+  let response;
+  for (let attempt = 1; ; attempt++) {
+    let failure;
+    try {
+      response = await fetch(endpoint, {
+        method: 'POST',
+        redirect: 'error',
+        headers: {
+          Authorization: `Bearer ${oidcToken}`,
+          'Content-Type': 'application/json',
+        },
+        body,
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+
+      if (!retryableStatuses.has(response.status) || attempt >= maxAttempts) {
+        break;
+      }
+
+      await response.body?.cancel();
+      failure = `returned HTTP ${response.status}`;
+    } catch (error) {
+      const reason = error.name === 'TimeoutError'
+        ? `timed out after ${timeoutMs / 1000}s`
+        : `failed: ${error.cause?.code ?? error.cause?.message ?? error.message}`;
+      if (attempt >= maxAttempts) {
+        throw new Error(`Server resolve ${reason}`, { cause: error });
+      }
+
+      failure = reason;
+    }
+
+    // Back off exponentially with jitter.
+    const delayMs = Math.min(retryDelayBaseMs * 2 ** (attempt - 1), retryDelayMaxMs) * (0.5 + Math.random());
+    core.info(
+      `Server resolve ${failure}, retrying in ${Math.round(delayMs)}ms ` +
+      `(attempt ${attempt + 1} of ${maxAttempts}).`,
+    );
+    await new Promise((resolve) => setTimeout(resolve, delayMs));
+  }
 
   if (!response.ok) {
     let detail;
@@ -48,19 +97,20 @@ module.exports = async function resolve({ core, context }) {
       const problem = await response.json().catch(() => null);
       detail = problem?.detail ?? problem?.title;
     }
-    throw new Error(
-      detail
-        ? `Arbiterer resolve failed with HTTP ${response.status}: ${detail}`
-        : `Arbiterer resolve failed with HTTP ${response.status}.`,
-    );
+
+    let message = `Server resolve failed with HTTP ${response.status}.`;
+    if (detail) {
+      message += ` Detail: ${detail}`;
+    }
+    throw new Error(message);
   }
 
   const result = await response.json().catch(() => {
-    throw new Error('Arbiterer returned an invalid JSON response.');
+    throw new Error('Server returned an invalid JSON response.');
   });
 
   if (typeof result.status !== 'string' || !result.status) {
-    throw new Error('Arbiterer returned an invalid status.');
+    throw new Error('Server returned an invalid status.');
   }
 
   core.setOutput('status', result.status);
@@ -70,7 +120,7 @@ module.exports = async function resolve({ core, context }) {
   if (result.app_install_url) {
     await reportMissingApp({ core, installUrl: result.app_install_url, fail: failOnMissingApp });
   }
-}
+};
 
 /**
  * Tells maintainers the GitHub App is missing, in the job summary and as an
@@ -82,7 +132,7 @@ module.exports = async function resolve({ core, context }) {
  * @returns {Promise<void>}
  */
 async function reportMissingApp({ core, installUrl, fail }) {
-  const title = 'Arbiterer GitHub App not installed';
+  const title = 'Server GitHub App not installed';
   const reason =
     'The Arbiterer GitHub App is not installed on this repository, so it could not post the setup comment ' +
     'telling the pull request author how to link their accounts.';
