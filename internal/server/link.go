@@ -76,7 +76,7 @@ func (s *Server) sealLinkToken(lt linkToken) (string, error) {
 		return "", fmt.Errorf("sealing link token: %w", err)
 	}
 
-	sealed, err := s.tokenSealer.Seal(payload, []byte(linkTokenAAD))
+	sealed, err := s.browserSealer.Seal(payload, []byte(linkTokenAAD))
 	if err != nil {
 		return "", fmt.Errorf("sealing link token: %w", err)
 	}
@@ -91,7 +91,7 @@ func (s *Server) openLinkToken(encoded string) (linkToken, error) {
 		return linkToken{}, fmt.Errorf("decoding link token: %w", err)
 	}
 
-	payload, err := s.tokenSealer.Open(sealed, []byte(linkTokenAAD))
+	payload, err := s.browserSealer.Open(sealed, []byte(linkTokenAAD))
 	if err != nil {
 		return linkToken{}, fmt.Errorf("opening link token: %w", err)
 	}
@@ -115,7 +115,7 @@ func (s *Server) sealLinkCookie(c linkCookie) (string, error) {
 		return "", fmt.Errorf("sealing link cookie: %w", err)
 	}
 
-	sealed, err := s.cookieSealer.Seal(payload, []byte(linkCookieAAD))
+	sealed, err := s.browserSealer.Seal(payload, []byte(linkCookieAAD))
 	if err != nil {
 		return "", fmt.Errorf("sealing link cookie: %w", err)
 	}
@@ -130,7 +130,7 @@ func (s *Server) openLinkCookie(encoded string) (linkCookie, error) {
 		return linkCookie{}, fmt.Errorf("decoding link cookie: %w", err)
 	}
 
-	payload, err := s.cookieSealer.Open(sealed, []byte(linkCookieAAD))
+	payload, err := s.browserSealer.Open(sealed, []byte(linkCookieAAD))
 	if err != nil {
 		return linkCookie{}, fmt.Errorf("opening link cookie: %w", err)
 	}
@@ -357,7 +357,7 @@ func (s *Server) handleLinkDiscordCallback(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	sealedAccess, err := s.tokenSealer.Seal(
+	sealedAccess, err := s.storageSealer.Seal(
 		[]byte(token.AccessToken),
 		tokenAAD(discordUserID, aadFieldAccess),
 	)
@@ -367,7 +367,7 @@ func (s *Server) handleLinkDiscordCallback(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	sealedRefresh, err := s.tokenSealer.Seal(
+	sealedRefresh, err := s.storageSealer.Seal(
 		[]byte(token.RefreshToken),
 		tokenAAD(discordUserID, aadFieldRefresh),
 	)

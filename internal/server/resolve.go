@@ -94,7 +94,7 @@ const (
 
 func (s *Server) accessToken(ctx context.Context, user *storage.DiscordUser) (string, error) {
 	if time.Until(user.TokenExpiresAt) > refreshSkew {
-		accessToken, err := s.tokenSealer.Open(
+		accessToken, err := s.storageSealer.Open(
 			user.EncryptedAccessToken,
 			tokenAAD(user.ID, aadFieldAccess),
 		)
@@ -105,7 +105,7 @@ func (s *Server) accessToken(ctx context.Context, user *storage.DiscordUser) (st
 		return string(accessToken), nil
 	}
 
-	refreshToken, err := s.tokenSealer.Open(
+	refreshToken, err := s.storageSealer.Open(
 		user.EncryptedRefreshToken,
 		tokenAAD(user.ID, aadFieldRefresh),
 	)
@@ -126,7 +126,7 @@ func (s *Server) accessToken(ctx context.Context, user *storage.DiscordUser) (st
 		return "", fmt.Errorf("refreshing token: %w", err)
 	}
 
-	sealedAccessToken, err := s.tokenSealer.Seal(
+	sealedAccessToken, err := s.storageSealer.Seal(
 		[]byte(token.AccessToken),
 		tokenAAD(user.ID, aadFieldAccess),
 	)
@@ -134,7 +134,7 @@ func (s *Server) accessToken(ctx context.Context, user *storage.DiscordUser) (st
 		return "", fmt.Errorf("sealing access token: %w", err)
 	}
 
-	sealedRefreshToken, err := s.tokenSealer.Seal(
+	sealedRefreshToken, err := s.storageSealer.Seal(
 		[]byte(token.RefreshToken),
 		tokenAAD(user.ID, aadFieldRefresh),
 	)
