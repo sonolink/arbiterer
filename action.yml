@@ -1,0 +1,39 @@
+name: Resolve Discord link
+description: >-
+  Resolve a GitHub user's Discord account through Arbiterer using GitHub OIDC. The calling job needs the
+  `id-token: write` permission. Note: for pull requests from forks, the workflow must use `on: pull_request_target`.
+inputs:
+  guild-id:
+    description: Discord server ID to check membership in. Omit to check only the account link. The result will include a
+      GuildMember object if the user is a member of the server.
+    required: false
+  fail-on-missing-app:
+    description: Fail the step when the Arbiterer GitHub App is not installed on the repository, instead of only warning.
+      Without the app, Arbiterer cannot post the setup comment telling the pull request author how to link their accounts.
+    required: false
+    default: 'false'
+outputs:
+  status:
+    description: Account link status returned by Arbiterer.
+    value: ${{ steps.request.outputs.status }}
+  link-url:
+    description: URL for linking or re-linking an account.
+    value: ${{ steps.request.outputs.link-url }}
+  member:
+    description: GuildMember object if the user is a member of the server, otherwise null.
+    value: ${{ steps.request.outputs.member }}
+
+runs:
+  using: composite
+  steps:
+    - id: request
+      uses: actions/github-script@v7
+      env:
+        ARBITERER_ACTION_PATH: ${{ github.action_path }}
+        ARBITERER_GUILD_ID: ${{ inputs.guild-id }}
+        ARBITERER_FAIL_ON_MISSING_APP: ${{ inputs.fail-on-missing-app }}
+      with:
+        script: |
+          const path = require('path');
+          const resolve = require(path.join(process.env.ARBITERER_ACTION_PATH, 'scripts', 'resolve.js'));
+          await resolve({ core, context });
