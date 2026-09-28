@@ -5,7 +5,7 @@
 We are committed to keeping Arbiterer secure.  
 At this time, we only provide security updates and patches for the [latest stable releases](https://github.com/sonolink/arbiterer/releases/latest).
 
-If you are using an outdated version of the library, we strongly recommend upgrading to the most recent version to ensure you have the latest security fixes and type-checking improvements.
+If you are using an outdated version of Arbiterer, we strongly recommend upgrading to the most recent version to ensure you have the latest security fixes and type-checking improvements.
 
 ## Reporting a Vulnerability
 
