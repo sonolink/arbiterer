@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/subtle"
 	"encoding/base64"
@@ -8,9 +9,12 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
+	"github.com/sonolink/arbiterer/internal/discord"
 	"github.com/sonolink/arbiterer/internal/storage"
 )
 
@@ -36,6 +40,7 @@ const (
 	linkDetailGitHubUser       = "Could not read your GitHub account. Please try again."
 	linkDetailIdentityMismatch = "This link belongs to a different GitHub account."
 	linkDetailDiscordAuth      = "Discord authorization failed. Please try again."
+	linkDetailDiscordTaken     = "This Discord account is already linked to another GitHub account for this repository."
 	linkDetailDiscordUser      = "Could not read your Discord account. Please try again."
 	linkDetailInternal         = "Something went wrong. Please try again."
 )
@@ -46,6 +51,9 @@ var errLinkExpired = errors.New("link token expired")
 type linkToken struct {
 	GitHubUserID string    `json:"github_user_id"`
 	RepositoryID int64     `json:"repository_id"`
+	Repository   string    `json:"repository"`
+	IssueNumber  int64     `json:"issue_number"`
+	GuildID      string    `json:"guild_id,omitempty"`
 	Expiry       time.Time `json:"expiry"`
 }
 
@@ -54,20 +62,22 @@ type linkCookie struct {
 	Nonce        string `json:"nonce"`
 	RepositoryID int64  `json:"repository_id"`
 	GitHubUserID string `json:"github_user_id"`
+	Repository   string `json:"repository"`
+	IssueNumber  int64  `json:"issue_number"`
+	GuildID      string `json:"guild_id,omitempty"`
 }
 
-// sealLinkToken produces a URL-safe bearer token for a resolving link.
-func (s *Server) sealLinkToken(githubUserID string, repositoryID int64) (string, error) {
-	payload, err := json.Marshal(linkToken{
-		GitHubUserID: githubUserID,
-		RepositoryID: repositoryID,
-		Expiry:       time.Now().Add(s.cfg.LinkTokenLifetime),
-	})
+// sealLinkToken produces a URL-safe bearer token for a resolving link,
+// expiring after the configured lifetime.
+func (s *Server) sealLinkToken(lt linkToken) (string, error) {
+	lt.Expiry = time.Now().Add(s.cfg.LinkTokenLifetime)
+
+	payload, err := json.Marshal(lt)
 	if err != nil {
 		return "", fmt.Errorf("sealing link token: %w", err)
 	}
 
-	sealed, err := s.tokenSealer.Seal(payload, []byte(linkTokenAAD))
+	sealed, err := s.browserSealer.Seal(payload, []byte(linkTokenAAD))
 	if err != nil {
 		return "", fmt.Errorf("sealing link token: %w", err)
 	}
@@ -76,27 +86,27 @@ func (s *Server) sealLinkToken(githubUserID string, repositoryID int64) (string,
 }
 
 // openLinkToken decodes, unseals and expiry-checks a link token.
-func (s *Server) openLinkToken(encoded string) (*linkToken, error) {
+func (s *Server) openLinkToken(encoded string) (linkToken, error) {
 	sealed, err := base64.RawURLEncoding.DecodeString(encoded)
 	if err != nil {
-		return nil, fmt.Errorf("decoding link token: %w", err)
+		return linkToken{}, fmt.Errorf("decoding link token: %w", err)
 	}
 
-	payload, err := s.tokenSealer.Open(sealed, []byte(linkTokenAAD))
+	payload, err := s.browserSealer.Open(sealed, []byte(linkTokenAAD))
 	if err != nil {
-		return nil, fmt.Errorf("opening link token: %w", err)
+		return linkToken{}, fmt.Errorf("opening link token: %w", err)
 	}
 
 	var lt linkToken
 	if err := json.Unmarshal(payload, &lt); err != nil {
-		return nil, fmt.Errorf("decoding link token: %w", err)
+		return linkToken{}, fmt.Errorf("decoding link token: %w", err)
 	}
 
 	if time.Now().After(lt.Expiry) {
-		return nil, errLinkExpired
+		return linkToken{}, errLinkExpired
 	}
 
-	return &lt, nil
+	return lt, nil
 }
 
 // sealLinkCookie seals the handoff between the GitHub and Discord.
@@ -106,7 +116,7 @@ func (s *Server) sealLinkCookie(c linkCookie) (string, error) {
 		return "", fmt.Errorf("sealing link cookie: %w", err)
 	}
 
-	sealed, err := s.cookieSealer.Seal(payload, []byte(linkCookieAAD))
+	sealed, err := s.browserSealer.Seal(payload, []byte(linkCookieAAD))
 	if err != nil {
 		return "", fmt.Errorf("sealing link cookie: %w", err)
 	}
@@ -115,23 +125,23 @@ func (s *Server) sealLinkCookie(c linkCookie) (string, error) {
 }
 
 // openLinkCookie unseals a value produced by sealLinkCookie.
-func (s *Server) openLinkCookie(encoded string) (*linkCookie, error) {
+func (s *Server) openLinkCookie(encoded string) (linkCookie, error) {
 	sealed, err := base64.RawURLEncoding.DecodeString(encoded)
 	if err != nil {
-		return nil, fmt.Errorf("decoding link cookie: %w", err)
+		return linkCookie{}, fmt.Errorf("decoding link cookie: %w", err)
 	}
 
-	payload, err := s.cookieSealer.Open(sealed, []byte(linkCookieAAD))
+	payload, err := s.browserSealer.Open(sealed, []byte(linkCookieAAD))
 	if err != nil {
-		return nil, fmt.Errorf("opening link cookie: %w", err)
+		return linkCookie{}, fmt.Errorf("opening link cookie: %w", err)
 	}
 
 	var c linkCookie
 	if err := json.Unmarshal(payload, &c); err != nil {
-		return nil, fmt.Errorf("decoding link cookie: %w", err)
+		return linkCookie{}, fmt.Errorf("decoding link cookie: %w", err)
 	}
 
-	return &c, nil
+	return c, nil
 }
 
 // newNonce returns a random, URL-safe value used as the OAuth state nonce.
@@ -175,7 +185,7 @@ func (s *Server) handleLink(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	state, err := s.sealLinkToken(lt.GitHubUserID, lt.RepositoryID)
+	state, err := s.sealLinkToken(lt)
 	if err != nil {
 		s.logger.Error("sealing link state", "error", err)
 		s.writeProblem(w, r, http.StatusInternalServerError, linkDetailInternal)
@@ -202,6 +212,7 @@ func (s *Server) handleLinkGitHubCallback(w http.ResponseWriter, r *http.Request
 	}
 
 	code := r.URL.Query().Get("code")
+
 	accessToken, err := s.githubClient.Exchange(ctx, code)
 	if err != nil {
 		s.logger.Error("github oauth exchange failed", "error", err)
@@ -209,7 +220,7 @@ func (s *Server) handleLinkGitHubCallback(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	ghUser, err := s.githubClient.User(ctx, accessToken)
+	ghUser, err := s.githubClient.FetchUser(ctx, accessToken)
 	if err != nil {
 		s.logger.Error("fetching github user failed", "error", err)
 		s.writeProblem(w, r, http.StatusBadRequest, linkDetailGitHubUser)
@@ -225,6 +236,54 @@ func (s *Server) handleLinkGitHubCallback(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	lc := linkCookie{
+		RepositoryID: lt.RepositoryID,
+		GitHubUserID: lt.GitHubUserID,
+		Repository:   lt.Repository,
+		IssueNumber:  lt.IssueNumber,
+		GuildID:      lt.GuildID,
+	}
+
+	discordPath := url.URL{Path: "/link/discord"}
+	discordStepURL := strings.TrimSuffix(s.cfg.PublicURL, "/") + discordPath.RequestURI()
+	if err := s.syncSetupComment(
+		ctx,
+		lc.RepositoryID,
+		lc.Repository,
+		lc.IssueNumber,
+		commentGitHubVerified,
+		discordStepURL,
+		lc.GuildID != "",
+	); err != nil {
+		s.logSetupCommentError(err)
+	}
+
+	s.redirectToDiscord(w, r, lc)
+}
+
+// --- GET /link/discord ---.
+// Resumes a linking attempt at the Discord step, for a contributor who signed
+// in with GitHub in this browser but left before authorizing Discord.
+func (s *Server) handleLinkDiscord(w http.ResponseWriter, r *http.Request) {
+	cookie, err := r.Cookie(linkCookieName)
+	if err != nil {
+		s.writeProblem(w, r, http.StatusBadRequest, linkDetailRestart)
+		return
+	}
+
+	lc, err := s.openLinkCookie(cookie.Value)
+	if err != nil {
+		s.logger.Warn("rejecting link cookie", "error", err)
+		s.writeProblem(w, r, http.StatusBadRequest, linkDetailRestart)
+		return
+	}
+
+	s.redirectToDiscord(w, r, lc)
+}
+
+// redirectToDiscord stores lc under a fresh state nonce in the linking cookie
+// and sends the browser to Discord's authorize page.
+func (s *Server) redirectToDiscord(w http.ResponseWriter, r *http.Request, lc linkCookie) {
 	nonce, err := newNonce()
 	if err != nil {
 		s.logger.Error("generating nonce", "error", err)
@@ -232,11 +291,9 @@ func (s *Server) handleLinkGitHubCallback(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	sealedCookie, err := s.sealLinkCookie(linkCookie{
-		Nonce:        nonce,
-		RepositoryID: lt.RepositoryID,
-		GitHubUserID: lt.GitHubUserID,
-	})
+	lc.Nonce = nonce
+
+	sealedCookie, err := s.sealLinkCookie(lc)
 	if err != nil {
 		s.logger.Error("sealing link cookie", "error", err)
 		s.writeProblem(w, r, http.StatusInternalServerError, linkDetailInternal)
@@ -301,7 +358,7 @@ func (s *Server) handleLinkDiscordCallback(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	sealedAccess, err := s.tokenSealer.Seal(
+	sealedAccess, err := s.storageSealer.Seal(
 		[]byte(token.AccessToken),
 		tokenAAD(discordUserID, aadFieldAccess),
 	)
@@ -311,7 +368,7 @@ func (s *Server) handleLinkDiscordCallback(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	sealedRefresh, err := s.tokenSealer.Seal(
+	sealedRefresh, err := s.storageSealer.Seal(
 		[]byte(token.RefreshToken),
 		tokenAAD(discordUserID, aadFieldRefresh),
 	)
@@ -328,19 +385,61 @@ func (s *Server) handleLinkDiscordCallback(w http.ResponseWriter, r *http.Reques
 		TokenExpiresAt:        token.ExpiresAt,
 	}
 
-	// TODO: store.LinkGitHubDiscord needs to be implemented
 	if err := s.store.LinkGitHubDiscord(
 		ctx,
 		lc.GitHubUserID,
-		discordUserID,
 		lc.RepositoryID,
 		linkUser,
 	); err != nil {
+		if errors.Is(err, storage.ErrDiscordAlreadyLinked) {
+			s.logger.Warn("discord account already linked to another github user",
+				"repository_id", lc.RepositoryID,
+				"discord_user_id", discordUserID,
+			)
+			s.writeProblem(w, r, http.StatusConflict, linkDetailDiscordTaken)
+			return
+		}
+
 		s.logger.Error("persisting link", "error", err)
 		s.writeProblem(w, r, http.StatusInternalServerError, linkDetailInternal)
 		return
 	}
 
 	s.writeLinkCookie(w, "", -1)
+
+	if err := s.syncSetupComment(
+		ctx,
+		lc.RepositoryID,
+		lc.Repository,
+		lc.IssueNumber,
+		s.linkedCommentStatus(ctx, token.AccessToken, lc.GuildID),
+		"",
+		lc.GuildID != "",
+	); err != nil {
+		s.logSetupCommentError(err)
+	}
+
 	s.writeJSON(w, http.StatusOK, "Your GitHub and Discord accounts are now connected.")
+}
+
+// linkedCommentStatus returns the setup comment status of a contributor who
+// just linked their accounts, checking their membership of guildID when the
+// check requires one. A membership that cannot be confirmed is reported as
+// missing, so the step stays open until resolve confirms it.
+func (s *Server) linkedCommentStatus(ctx context.Context, accessToken, guildID string) commentStatus {
+	if guildID == "" {
+		return commentLinked
+	}
+
+	_, err := s.discordClient.GuildMember(ctx, accessToken, guildID)
+	if err == nil {
+		return commentLinked
+	}
+
+	var apiErr *discord.APIError
+	if !errors.As(err, &apiErr) || apiErr.Status != http.StatusNotFound {
+		s.logger.Warn("checking guild membership after linking", "error", err)
+	}
+
+	return commentNotAMember
 }
