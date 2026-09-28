@@ -9,15 +9,15 @@ if (!audience || !serverUrl) {
  * @param {Object} options
  * @param {typeof import('@actions/core')} options.core
  * @param {typeof import('@actions/github').context} options.context
- * @param {ReturnType<typeof import('@actions/github').getOctokit>} options.github
- * @param {string} [options.guildId]
  * @returns {Promise<void>}
  */
-module.exports = async function resolve({ core, context, guildId }) {
-  guildId = guildId?.trim() || undefined;
+module.exports = async function resolve({ core, context }) {
+  const guildId = process.env.ARBITERER_GUILD_ID?.trim() || undefined;
+  const failOnMissingApp = process.env.ARBITERER_FAIL_ON_MISSING_APP?.trim().toLowerCase() === 'true';
   const userId = context.payload.pull_request
     ? context.payload.pull_request.user?.id
     : context.payload.sender?.id;
+  const issueNumber = context.payload.pull_request?.number;
 
   if (!userId) {
     throw new Error('Cannot determine the GitHub user ID from the workflow event.');
@@ -37,6 +37,7 @@ module.exports = async function resolve({ core, context, guildId }) {
     body: JSON.stringify({
       github_user_id: String(userId),
       ...(guildId ? { guild_id: guildId } : {}),
+      ...(issueNumber ? { issue_number: issueNumber } : {}),
     }),
     signal: AbortSignal.timeout(30000),
   });
@@ -62,10 +63,43 @@ module.exports = async function resolve({ core, context, guildId }) {
     throw new Error('Arbiterer returned an invalid status.');
   }
 
-  const status = result.status;
-  const setupUrl = result.setup_url ?? '';
-  core.setOutput('status', status);
-  core.setOutput('setup-url', setupUrl);
-  core.setOutput('guild-id', guildId ?? null);
+  core.setOutput('status', result.status);
+  core.setOutput('link-url', result.link_url ?? '');
   core.setOutput('member', result.member ?? null);
+
+  if (result.app_install_url) {
+    await reportMissingApp({ core, installUrl: result.app_install_url, fail: failOnMissingApp });
+  }
+}
+
+/**
+ * Tells maintainers the GitHub App is missing, in the job summary and as an
+ * annotation, failing the step when they asked for that.
+ * @param {Object} options
+ * @param {typeof import('@actions/core')} options.core
+ * @param {string} options.installUrl
+ * @param {boolean} options.fail
+ * @returns {Promise<void>}
+ */
+async function reportMissingApp({ core, installUrl, fail }) {
+  const title = 'Arbiterer GitHub App not installed';
+  const message =
+    'The Arbiterer GitHub App is not installed on this repository, so it could not post the setup comment ' +
+    `for the pull request author. A maintainer can install it here: ${installUrl}`;
+
+  await core.summary
+    .addHeading(title, 3)
+    .addRaw(
+      'The Arbiterer GitHub App is not installed on this repository, so it could not post the setup comment ' +
+      'telling the pull request author how to link their accounts.',
+      true,
+    )
+    .addLink('Install the Arbiterer GitHub App', installUrl)
+    .write();
+
+  if (fail) {
+    core.setFailed(message);
+  } else {
+    core.warning(message, { title });
+  }
 }

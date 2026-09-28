@@ -5,13 +5,18 @@ inputs:
     description: Discord server ID to check membership in. Omit to check only the account link. The result will include a
       GuildMember object if the user is a member of the server.
     required: false
+  fail-on-missing-app:
+    description: Fail the step when the Arbiterer GitHub App is not installed on the repository, instead of only warning.
+      Without the app, Arbiterer cannot post the setup comment telling the pull request author how to link their accounts.
+    required: false
+    default: false
 outputs:
   status:
     description: Account link status returned by Arbiterer.
     value: ${{ steps.request.outputs.status }}
-  setup-url:
+  link-url:
     description: URL for linking or re-linking an account.
-    value: ${{ steps.request.outputs.setup-url }}
+    value: ${{ steps.request.outputs.link-url }}
   member:
     description: GuildMember object if the user is a member of the server, otherwise null.
     value: ${{ steps.request.outputs.member }}
@@ -25,9 +30,11 @@ runs:
         ARBITERER_ACTION_PATH: ${{ github.action_path }}
         ARBITERER_SERVER_URL: "https://api.arbiterer.com/v1"
         ARBITERER_OIDC_AUDIENCE: "https://arbiterer.com"
+        ARBITERER_GUILD_ID: ${{ inputs.guild-id }}
+        ARBITERER_FAIL_ON_MISSING_APP: ${{ inputs.fail-on-missing-app }}
 
       with:
         script: |
           const path = require('path');
           const resolve = require(path.join(process.env.ARBITERER_ACTION_PATH, 'scripts', 'resolve.js'));
-          await resolve({ core, context, github, guildId: ${{ toJSON(inputs.guild-id) }} });
+          await resolve({ core, context });
