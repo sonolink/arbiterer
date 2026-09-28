@@ -94,7 +94,7 @@ func runServe() error {
 
 	storageSealer, err := secrets.NewSealer(cfg.Secrets.StorageKey)
 	if err != nil {
-		return fmt.Errorf("creating token sealer: %w", err)
+		return fmt.Errorf("creating storage sealer: %w", err)
 	}
 
 	browserSealer, err := secrets.NewSealer(cfg.Secrets.BrowserKey)
