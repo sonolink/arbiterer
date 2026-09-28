@@ -172,7 +172,7 @@ func (s *Server) syncSetupComment(
 
 		switch {
 		case err == nil, commentDeleted && status == commentLinked:
-			return s.store.SaveSetupComment(ctx, comment)
+			return s.store.UpsertSetupComment(ctx, comment)
 		case !commentDeleted:
 			return fmt.Errorf("updating comment: %w", err)
 		}
@@ -183,7 +183,7 @@ func (s *Server) syncSetupComment(
 		return fmt.Errorf("creating comment: %w", err)
 	}
 
-	return s.store.SaveSetupComment(ctx, comment)
+	return s.store.UpsertSetupComment(ctx, comment)
 }
 
 // logSetupCommentError logs a failed comment sync. A missing app installation

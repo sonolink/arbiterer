@@ -50,9 +50,9 @@ func (s *Store) SetupCommentByPullRequest(
 	return &comment, nil
 }
 
-// SaveSetupComment stores the setup comment of a pull request, replacing any
+// UpsertSetupComment stores the setup comment of a pull request, replacing any
 // previously stored one.
-func (s *Store) SaveSetupComment(ctx context.Context, comment *SetupComment) error {
+func (s *Store) UpsertSetupComment(ctx context.Context, comment *SetupComment) error {
 	const query = `
 		INSERT INTO setup_comments (repository_id, issue_number, comment_id, status)
 		VALUES ($1, $2, $3, $4)
@@ -70,7 +70,7 @@ func (s *Store) SaveSetupComment(ctx context.Context, comment *SetupComment) err
 		comment.CommentID,
 		comment.Status,
 	); err != nil {
-		return fmt.Errorf("storage: save setup comment: %w", err)
+		return fmt.Errorf("storage: upsert setup comment: %w", err)
 	}
 
 	return nil
