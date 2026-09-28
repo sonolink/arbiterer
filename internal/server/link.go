@@ -40,6 +40,7 @@ const (
 	linkDetailGitHubUser       = "Could not read your GitHub account. Please try again."
 	linkDetailIdentityMismatch = "This link belongs to a different GitHub account."
 	linkDetailDiscordAuth      = "Discord authorization failed. Please try again."
+	linkDetailDiscordTaken     = "This Discord account is already linked to another GitHub account for this repository."
 	linkDetailDiscordUser      = "Could not read your Discord account. Please try again."
 	linkDetailInternal         = "Something went wrong. Please try again."
 )
@@ -390,6 +391,15 @@ func (s *Server) handleLinkDiscordCallback(w http.ResponseWriter, r *http.Reques
 		lc.RepositoryID,
 		linkUser,
 	); err != nil {
+		if errors.Is(err, storage.ErrDiscordAlreadyLinked) {
+			s.logger.Warn("discord account already linked to another github user",
+				"repository_id", lc.RepositoryID,
+				"discord_user_id", discordUserID,
+			)
+			s.writeProblem(w, r, http.StatusConflict, linkDetailDiscordTaken)
+			return
+		}
+
 		s.logger.Error("persisting link", "error", err)
 		s.writeProblem(w, r, http.StatusInternalServerError, linkDetailInternal)
 		return

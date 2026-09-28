@@ -7,7 +7,12 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 )
+
+// ErrDiscordAlreadyLinked reports that the Discord account is already linked to
+// a different GitHub user in the repository.
+var ErrDiscordAlreadyLinked = errors.New("storage: discord account already linked to another github user")
 
 // DiscordUser is a linked Discord account.
 type DiscordUser struct {
@@ -121,6 +126,11 @@ func (s *Store) LinkGitHubDiscord(
 		SET discord_user_id = EXCLUDED.discord_user_id
 	`
 	if _, err := tx.Exec(ctx, upsertConnectionQuery, githubUserID, user.ID, repositoryID); err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" { // unique violation
+			return ErrDiscordAlreadyLinked
+		}
+
 		return fmt.Errorf("storage: link github discord: %w", err)
 	}
 
