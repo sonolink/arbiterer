@@ -92,14 +92,14 @@ func runServe() error {
 	discordClient := discord.NewClient(cfg.Discord)
 	githubClient := github.NewClient(cfg.GitHub)
 
-	storageSealer, err := secrets.NewSealer(cfg.Secrets.TokenKey)
+	storageSealer, err := secrets.NewSealer(cfg.Secrets.StorageKey)
 	if err != nil {
 		return fmt.Errorf("creating token sealer: %w", err)
 	}
 
-	browserSealer, err := secrets.NewSealer(cfg.Secrets.CookieKey)
+	browserSealer, err := secrets.NewSealer(cfg.Secrets.BrowserKey)
 	if err != nil {
-		return fmt.Errorf("creating transit sealer: %w", err)
+		return fmt.Errorf("creating browser sealer: %w", err)
 	}
 
 	verifier := github.NewVerifier(ctx, cfg.GitHub)

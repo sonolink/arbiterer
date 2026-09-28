@@ -171,10 +171,10 @@ func (k *Key) UnmarshalText(text []byte) error {
 	return nil
 }
 
-// Secrets holds the keys used to encrypt secrets at rest.
+// Secrets holds the keys used to encrypt sensitive values.
 type Secrets struct {
-	TokenKey  Key `env:"TOKEN_ENCRYPTION_KEY,required"`
-	CookieKey Key `env:"COOKIE_SIGNING_KEY,required"`
+	StorageKey Key `env:"STORAGE_ENCRYPTION_KEY,required"`
+	BrowserKey Key `env:"BROWSER_ENCRYPTION_KEY,required"`
 }
 
 // GitHub holds the application settings used for OAuth and OIDC.
