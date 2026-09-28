@@ -5,6 +5,10 @@ inputs:
     description: Discord server ID to check membership in. Omit to check only the account link. The result will include a
       GuildMember object if the user is a member of the server.
     required: false
+  server-url:
+    description: Base URL of the server to call, including any path prefix (e.g. /v1).
+    required: false
+    defualt: "https://api.arbiterer.com/v1"
   fail-on-missing-app:
     description: Fail the step when the Arbiterer GitHub App is not installed on the repository, instead of only warning.
       Without the app, Arbiterer cannot post the setup comment telling the pull request author how to link their accounts.
@@ -28,7 +32,7 @@ runs:
       uses: actions/github-script@v7
       env:
         ARBITERER_ACTION_PATH: ${{ github.action_path }}
-        ARBITERER_SERVER_URL: "https://api.arbiterer.com/v1"
+        ARBITERER_SERVER_URL: ${{ inputs.server-url }}
         ARBITERER_OIDC_AUDIENCE: "https://arbiterer.com"
         ARBITERER_GUILD_ID: ${{ inputs.guild-id }}
         ARBITERER_FAIL_ON_MISSING_APP: ${{ inputs.fail-on-missing-app }}
