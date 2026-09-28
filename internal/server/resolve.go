@@ -326,8 +326,9 @@ func (s *Server) handleResolve(w http.ResponseWriter, r *http.Request) {
 		claims.RepositoryID,
 		claims.Repository,
 		req.IssueNumber,
-		commentStatus(resp.Status),
+		commentStatusFor(resp.Status),
 		resp.LinkURL,
+		req.GuildID != "",
 	); err != nil {
 		s.logSetupCommentError(err)
 
