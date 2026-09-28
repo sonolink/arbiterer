@@ -6,46 +6,43 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
-	"sync"
 )
 
-// appSlug caches the app's URL name, which never changes for a given app.
-type appSlug struct {
-	mu   sync.Mutex
-	slug string
+// App is a minimal view of the GitHub App itself.
+type App struct {
+	Slug string `json:"slug"`
 }
 
-// slug returns the app's URL name, fetching it from GitHub on first use.
-func (c *Client) slug(ctx context.Context) (string, error) {
-	c.appSlug.mu.Lock()
-	defer c.appSlug.mu.Unlock()
+// fetchApp returns the app behind the configured credentials, fetching it
+// from GitHub on first use. The app never changes, so the result is cached.
+func (c *Client) fetchApp(ctx context.Context) (*App, error) {
+	c.appMu.Lock()
+	defer c.appMu.Unlock()
 
-	if c.appSlug.slug != "" {
-		return c.appSlug.slug, nil
+	if c.app != nil {
+		return c.app, nil
 	}
 
 	appJWT, err := c.generateJWT()
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
-	var app struct {
-		Slug string `json:"slug"`
-	}
+	var app App
 	if err := c.sendRequest(ctx, http.MethodGet, "/app", appJWT, nil, &app); err != nil {
-		return "", fmt.Errorf("github: fetching app: %w", err)
+		return nil, fmt.Errorf("github: fetching app: %w", err)
 	}
 
-	c.appSlug.slug = app.Slug
+	c.app = &app
 
-	return app.Slug, nil
+	return c.app, nil
 }
 
 // InstallURL returns the page for installing the app on the given repository.
 // The account and repository are preselected when GitHub honors the hints,
 // and the page falls back to a plain install otherwise.
 func (c *Client) InstallURL(ctx context.Context, ownerID, repositoryID int64) (string, error) {
-	slug, err := c.slug(ctx)
+	app, err := c.fetchApp(ctx)
 	if err != nil {
 		return "", err
 	}
@@ -53,7 +50,7 @@ func (c *Client) InstallURL(ctx context.Context, ownerID, repositoryID int64) (s
 	u := url.URL{
 		Scheme: "https",
 		Host:   "github.com",
-		Path:   "/apps/" + url.PathEscape(slug) + "/installations/new",
+		Path:   "/apps/" + url.PathEscape(app.Slug) + "/installations/new",
 	}
 
 	if ownerID != 0 {

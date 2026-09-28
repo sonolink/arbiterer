@@ -7,9 +7,10 @@ import (
 	"net/http"
 )
 
-// User is a minimal view of a GitHub user, holding just the id.
+// User is a minimal view of a GitHub user.
 type User struct {
-	ID int64 `json:"id"`
+	ID    int64  `json:"id"`
+	Login string `json:"login"`
 }
 
 // FetchUser returns the user behind the given OAuth access token.

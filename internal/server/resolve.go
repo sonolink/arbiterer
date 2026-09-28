@@ -17,9 +17,9 @@ import (
 )
 
 type resolveRequest struct {
-	GitHubUserID      string `json:"github_user_id"`
-	GuildID           string `json:"guild_id"`
-	PullRequestNumber int64  `json:"issue_number"` // GitHub's API addresses PRs as issues.
+	GitHubUserID string `json:"github_user_id"`
+	GuildID      string `json:"guild_id"`
+	IssueNumber  int64  `json:"issue_number"` // GitHub's API addresses PRs as issues.
 }
 
 type resolveStatus string
@@ -282,11 +282,11 @@ func (s *Server) handleResolve(w http.ResponseWriter, r *http.Request) {
 	)
 
 	lt := linkToken{
-		GitHubUserID:      req.GitHubUserID,
-		RepositoryID:      claims.RepositoryID,
-		Repository:        claims.Repository,
-		PullRequestNumber: req.PullRequestNumber,
-		GuildID:           req.GuildID,
+		GitHubUserID: req.GitHubUserID,
+		RepositoryID: claims.RepositoryID,
+		Repository:   claims.Repository,
+		IssueNumber:  req.IssueNumber,
+		GuildID:      req.GuildID,
 	}
 
 	var resp resolveResponse
@@ -321,20 +321,18 @@ func (s *Server) handleResolve(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if req.PullRequestNumber != 0 {
-		if err := s.syncSetupComment(
-			ctx,
-			claims.RepositoryID,
-			claims.Repository,
-			req.PullRequestNumber,
-			commentStatus(resp.Status),
-			resp.LinkURL,
-		); err != nil {
-			s.logSetupCommentError(err)
+	if err := s.syncSetupComment(
+		ctx,
+		claims.RepositoryID,
+		claims.Repository,
+		req.IssueNumber,
+		commentStatus(resp.Status),
+		resp.LinkURL,
+	); err != nil {
+		s.logSetupCommentError(err)
 
-			if errors.Is(err, github.ErrAppNotInstalled) {
-				resp.AppInstallURL = s.appInstallURL(ctx, claims)
-			}
+		if errors.Is(err, github.ErrAppNotInstalled) {
+			resp.AppInstallURL = s.appInstallURL(ctx, claims)
 		}
 	}
 

@@ -11,10 +11,10 @@ import (
 // SetupComment is the comment the app posted on a pull request telling its
 // author how to link their accounts, along with the status it last reported.
 type SetupComment struct {
-	RepositoryID      int64
-	PullRequestNumber int64
-	CommentID         int64
-	Status            string
+	RepositoryID int64
+	IssueNumber  int64
+	CommentID    int64
+	Status       string
 }
 
 // SetupCommentByPullRequest returns the setup comment posted on the given pull
@@ -22,19 +22,19 @@ type SetupComment struct {
 func (s *Store) SetupCommentByPullRequest(
 	ctx context.Context,
 	repositoryID int64,
-	pullRequestNumber int64,
+	issueNumber int64,
 ) (*SetupComment, error) {
 	const query = `
 		SELECT comment_id, status
 		FROM setup_comments
-		WHERE repository_id = $1 AND pull_request_number = $2`
+		WHERE repository_id = $1 AND issue_number = $2`
 
 	comment := SetupComment{
-		RepositoryID:      repositoryID,
-		PullRequestNumber: pullRequestNumber,
+		RepositoryID: repositoryID,
+		IssueNumber:  issueNumber,
 	}
 
-	err := s.pool.QueryRow(ctx, query, repositoryID, pullRequestNumber).Scan(
+	err := s.pool.QueryRow(ctx, query, repositoryID, issueNumber).Scan(
 		&comment.CommentID,
 		&comment.Status,
 	)
@@ -54,9 +54,9 @@ func (s *Store) SetupCommentByPullRequest(
 // previously stored one.
 func (s *Store) SaveSetupComment(ctx context.Context, comment *SetupComment) error {
 	const query = `
-		INSERT INTO setup_comments (repository_id, pull_request_number, comment_id, status)
+		INSERT INTO setup_comments (repository_id, issue_number, comment_id, status)
 		VALUES ($1, $2, $3, $4)
-		ON CONFLICT (repository_id, pull_request_number) DO UPDATE
+		ON CONFLICT (repository_id, issue_number) DO UPDATE
 		SET comment_id = EXCLUDED.comment_id,
 			status = EXCLUDED.status,
 			updated_at = NOW()
@@ -66,7 +66,7 @@ func (s *Store) SaveSetupComment(ctx context.Context, comment *SetupComment) err
 		ctx,
 		query,
 		comment.RepositoryID,
-		comment.PullRequestNumber,
+		comment.IssueNumber,
 		comment.CommentID,
 		comment.Status,
 	); err != nil {

@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -32,8 +33,10 @@ const (
 // Client talks to GitHub using the given application credentials.
 type Client struct {
 	cfg        config.GitHub
-	appSlug    appSlug
 	httpClient *http.Client
+
+	appMu sync.Mutex
+	app   *App
 }
 
 // NewClient builds a Client from a GitHub configuration.

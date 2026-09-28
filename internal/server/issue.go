@@ -25,6 +25,7 @@ const (
 	// has not yet authorized Discord. It is never served by resolve.
 	commentGitHubVerified commentStatus = "github_verified"
 
+	commentUnlinked   commentStatus = "unlinked"
 	commentLinked     commentStatus = "linked"
 	commentRevoked    commentStatus = "revoked"
 	commentNotAMember commentStatus = "not_a_member"
@@ -92,22 +93,26 @@ func setupCommentNeedsWrite(stored *storage.SetupComment, status commentStatus, 
 }
 
 // syncSetupComment reconciles the comment telling a contributor what they
-// need to do.
+// need to do. It does nothing outside a pull request.
 func (s *Server) syncSetupComment(
 	ctx context.Context,
 	repositoryID int64,
 	repo string,
-	pullRequestNumber int64,
+	issueNumber int64,
 	status commentStatus,
 	linkURL string,
 ) error {
+	if issueNumber == 0 {
+		return nil
+	}
+
 	// The comment only covers linking. Whatever else maintainers require, such
 	// as server membership, is theirs to report.
 	if status == commentNotAMember {
 		status = commentLinked
 	}
 
-	stored, err := s.store.SetupCommentByPullRequest(ctx, repositoryID, pullRequestNumber)
+	stored, err := s.store.SetupCommentByPullRequest(ctx, repositoryID, issueNumber)
 	if err != nil && !errors.Is(err, storage.ErrNotFound) {
 		return fmt.Errorf("looking up setup comment: %w", err)
 	}
@@ -121,16 +126,16 @@ func (s *Server) syncSetupComment(
 		return fmt.Errorf("creating installation token: %w", err)
 	}
 
-	author, err := s.githubClient.FetchPullRequestAuthorLogin(ctx, token, repo, pullRequestNumber)
+	author, err := s.githubClient.FetchIssueAuthor(ctx, token, repo, issueNumber)
 	if err != nil {
-		return fmt.Errorf("fetching pull request author: %w", err)
+		return fmt.Errorf("fetching issue author (%d): %w", issueNumber, err)
 	}
 
-	body := formatCommentBody(author, status, linkURL)
+	body := formatCommentBody(author.Login, status, linkURL)
 	comment := &storage.SetupComment{
-		RepositoryID:      repositoryID,
-		PullRequestNumber: pullRequestNumber,
-		Status:            string(status),
+		RepositoryID: repositoryID,
+		IssueNumber:  issueNumber,
+		Status:       string(status),
 	}
 
 	if stored != nil {
@@ -149,7 +154,7 @@ func (s *Server) syncSetupComment(
 		}
 	}
 
-	comment.CommentID, err = s.githubClient.CreateComment(ctx, token, repo, pullRequestNumber, body)
+	comment.CommentID, err = s.githubClient.CreateComment(ctx, token, repo, issueNumber, body)
 	if err != nil {
 		return fmt.Errorf("creating comment: %w", err)
 	}

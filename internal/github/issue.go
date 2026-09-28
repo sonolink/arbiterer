@@ -6,31 +6,28 @@ import (
 	"net/http"
 )
 
-// FetchPullRequestAuthorLogin returns the GitHub login of the user who opened
-// the given pull request.
-func (c *Client) FetchPullRequestAuthorLogin(
+// FetchIssueAuthor returns the user who opened the given issue (pull request).
+func (c *Client) FetchIssueAuthor(
 	ctx context.Context,
 	token string,
 	repo string,
-	pullRequestNumber int64,
-) (string, error) {
+	issueNumber int64,
+) (*User, error) {
 	var issue struct {
-		User struct {
-			Login string `json:"login"`
-		} `json:"user"`
+		User User `json:"user"`
 	}
 	if err := c.sendRequest(
 		ctx,
 		http.MethodGet,
-		fmt.Sprintf("/repos/%s/issues/%d", repo, pullRequestNumber),
+		fmt.Sprintf("/repos/%s/issues/%d", repo, issueNumber),
 		token,
 		nil,
 		&issue,
 	); err != nil {
-		return "", fmt.Errorf("github: fetching pull request: %w", err)
+		return nil, fmt.Errorf("github: fetching issue: %w", err)
 	}
 
-	return issue.User.Login, nil
+	return &issue.User, nil
 }
 
 // Comment is a comment on a pull request.
@@ -39,19 +36,19 @@ type Comment struct {
 	Body string `json:"body"`
 }
 
-// CreateComment posts a new comment on the given pull request and returns its id.
+// CreateComment posts a new comment on the given issue (pull request) and returns its id.
 func (c *Client) CreateComment(
 	ctx context.Context,
 	token string,
 	repo string,
-	pullRequestNumber int64,
+	issueNumber int64,
 	body string,
 ) (int64, error) {
 	var comment Comment
 	if err := c.sendRequest(
 		ctx,
 		http.MethodPost,
-		fmt.Sprintf("/repos/%s/issues/%d/comments", repo, pullRequestNumber),
+		fmt.Sprintf("/repos/%s/issues/%d/comments", repo, issueNumber),
 		token,
 		map[string]string{"body": body},
 		&comment,
