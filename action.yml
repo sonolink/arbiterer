@@ -1,7 +1,7 @@
 name: Resolve Discord link
 description: >-
   Resolve a GitHub user's Discord account through Arbiterer using GitHub OIDC. The calling job needs the
-  `id-token: write` permission.
+  `id-token: write` permission. Note: for pull requests from forks, the workflow must use `on: pull_request_target`.
 inputs:
   guild-id:
     description: Discord server ID to check membership in. Omit to check only the account link. The result will include a
@@ -32,7 +32,6 @@ runs:
         ARBITERER_ACTION_PATH: ${{ github.action_path }}
         ARBITERER_GUILD_ID: ${{ inputs.guild-id }}
         ARBITERER_FAIL_ON_MISSING_APP: ${{ inputs.fail-on-missing-app }}
-
       with:
         script: |
           const path = require('path');
