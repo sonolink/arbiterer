@@ -65,7 +65,7 @@ module.exports = async function resolve({ core, context }) {
 
   core.setOutput('status', result.status);
   core.setOutput('link-url', result.link_url ?? '');
-  core.setOutput('member', result.member ?? null);
+  core.setOutput('member', JSON.stringify(result.member ?? null));
 
   if (result.app_install_url) {
     await reportMissingApp({ core, installUrl: result.app_install_url, fail: failOnMissingApp });
