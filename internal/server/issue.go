@@ -45,9 +45,7 @@ func commentStatusFor(status resolveStatus) commentStatus {
 	}
 }
 
-// setupSteps lists the steps a contributor has to complete, linking the next
-// step to take with linkURL. Joining the server is only listed when the check
-// requires membership, and it is done once resolve has confirmed it.
+// setupSteps lists the steps a contributor must complete and links the next open step to linkURL.
 func setupSteps(status commentStatus, linkURL string, requiresMembership bool) []setupStep {
 	signInGitHub := setupStep{text: "Sign in with GitHub"}
 	signInDiscord := setupStep{text: "Sign in with Discord"}
@@ -55,16 +53,20 @@ func setupSteps(status commentStatus, linkURL string, requiresMembership bool) [
 
 	switch status {
 	case commentLinked:
+		// Nothing left to do; the comment only exists to clear an earlier ask.
 		signInGitHub.done = true
 		signInDiscord.done = true
 		joinServer.done = true
 	case commentNotAMember:
+		// Linked already; only the server join remains, and the next run confirms it.
 		signInGitHub.done = true
 		signInDiscord.done = true
-	case commentGitHubVerified, commentRevoked:
+	case commentGitHubVerified:
+		// Resumes at the Discord step via the cookie set in the GitHub callback.
 		signInGitHub.done = true
 		signInDiscord.text = fmt.Sprintf("[%s](%s)", signInDiscord.text, linkURL)
 	default:
+		// commentUnlinked, commentRevoked, and anything new start at GitHub.
 		signInGitHub.text = fmt.Sprintf("[%s](%s)", signInGitHub.text, linkURL)
 	}
 
