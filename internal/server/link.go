@@ -18,24 +18,33 @@ import (
 	"github.com/sonolink/arbiterer/internal/storage"
 )
 
+// AAD contexts. Each sealed payload type has its own.
 const (
-	// linkTokenAAD is the AAD context for link tokens.
-	linkTokenAAD = "arbiterer/link-token/v1"
+	linkTokenAAD       = "arbiterer/link-token/v1"
+	linkStateAAD       = "arbiterer/link-state/v1"
+	linkCookieAAD      = "arbiterer/link-cookie/v1"
+	linkStateCookieAAD = "arbiterer/link-state-cookie/v1"
+)
 
-	// linkCookieAAD is the AAD context for the linking cookie.
-	linkCookieAAD = "arbiterer/link-cookie/v1"
-
-	// linkCookieName is the name of the linking cookie.
+const (
+	// linkCookieName is the name of the handoff cookie. It is written only
+	// after the GitHub identity check, so holding it means GitHub is verified.
 	linkCookieName = "arbiterer_link"
+
+	// linkStateCookieName is the name of the cookie carrying the browser binding
+	// for the GitHub step.
+	linkStateCookieName = "arbiterer_link_state"
+
+	// linkPath is the path the linking flow is served under, and the scope both
+	// cookies are limited to.
+	linkPath = "/link"
 
 	// linkDiscordScopes are the OAuth scopes requested from Discord.
 	linkDiscordScopes = "identify guilds.members.read"
 )
 
 const (
-	linkDetailInvalidOrExpired = "This link is invalid or has expired. Please re-run the check to generate a fresh one."
-	linkDetailExpired          = "This link has expired. Please re-run the check to get a fresh one."
-	linkDetailRestart          = "This linking attempt has expired or was not started in this browser. Please re-run the check to start again."
+	linkDetailRestart          = "This linking attempt is no longer valid. Please re-run the check to start again."
 	linkDetailGitHubAuth       = "GitHub authorization failed. Please try again."
 	linkDetailGitHubUser       = "Could not read your GitHub account. Please try again."
 	linkDetailIdentityMismatch = "This link belongs to a different GitHub account."
@@ -45,10 +54,10 @@ const (
 	linkDetailInternal         = "Something went wrong. Please try again."
 )
 
-var (
-	errLinkTokenExpired  = errors.New("link token expired")
-	errLinkCookieExpired = errors.New("link cookie expired")
-)
+// linkExpiredf reports which part of the linking flow expired.
+func linkExpiredf(part string) error {
+	return fmt.Errorf("link %s expired", part)
+}
 
 // linkToken is the sealed payload carried through the URL from /v1/resolve.
 type linkToken struct {
@@ -57,10 +66,11 @@ type linkToken struct {
 	Repository   string    `json:"repository"`
 	IssueNumber  int64     `json:"issue_number"`
 	GuildID      string    `json:"guild_id,omitempty"`
+	Nonce        string    `json:"nonce,omitempty"`
 	Expiry       time.Time `json:"expiry"`
 }
 
-// linkCookie is the sealed payload carried between the GitHub and Discord.
+// linkCookie is the sealed handoff from the GitHub step to the Discord step.
 type linkCookie struct {
 	Nonce        string    `json:"nonce"`
 	RepositoryID int64     `json:"repository_id"`
@@ -71,9 +81,15 @@ type linkCookie struct {
 	Expiry       time.Time `json:"expiry"`
 }
 
-// sealLinkToken produces a URL-safe bearer token for a resolving link,
-// expiring after the configured lifetime.
-func (s *Server) sealLinkToken(lt linkToken) (string, error) {
+// linkStateCookie is the sealed browser binding for the GitHub step.
+type linkStateCookie struct {
+	Nonce  string    `json:"nonce"`
+	Expiry time.Time `json:"expiry"`
+}
+
+// sealLinkToken produces a URL-safe bearer token sealed under aad, expiring
+// after the configured lifetime.
+func (s *Server) sealLinkToken(lt linkToken, aad string) (string, error) {
 	lt.Expiry = time.Now().Add(s.cfg.LinkTokenLifetime)
 
 	payload, err := json.Marshal(lt)
@@ -81,7 +97,7 @@ func (s *Server) sealLinkToken(lt linkToken) (string, error) {
 		return "", fmt.Errorf("sealing link token: %w", err)
 	}
 
-	sealed, err := s.browserSealer.Seal(payload, []byte(linkTokenAAD))
+	sealed, err := s.browserSealer.Seal(payload, []byte(aad))
 	if err != nil {
 		return "", fmt.Errorf("sealing link token: %w", err)
 	}
@@ -89,14 +105,14 @@ func (s *Server) sealLinkToken(lt linkToken) (string, error) {
 	return base64.RawURLEncoding.EncodeToString(sealed), nil
 }
 
-// openLinkToken decodes, unseals and expiry-checks a link token.
-func (s *Server) openLinkToken(encoded string) (linkToken, error) {
+// openLinkToken decodes, unseals and expiry-checks a token sealed under aad.
+func (s *Server) openLinkToken(encoded, aad string) (linkToken, error) {
 	sealed, err := base64.RawURLEncoding.DecodeString(encoded)
 	if err != nil {
 		return linkToken{}, fmt.Errorf("decoding link token: %w", err)
 	}
 
-	payload, err := s.browserSealer.Open(sealed, []byte(linkTokenAAD))
+	payload, err := s.browserSealer.Open(sealed, []byte(aad))
 	if err != nil {
 		return linkToken{}, fmt.Errorf("opening link token: %w", err)
 	}
@@ -107,13 +123,13 @@ func (s *Server) openLinkToken(encoded string) (linkToken, error) {
 	}
 
 	if time.Now().After(lt.Expiry) {
-		return linkToken{}, errLinkTokenExpired
+		return linkToken{}, linkExpiredf("token")
 	}
 
 	return lt, nil
 }
 
-// sealLinkCookie seals the handoff between the GitHub and Discord,
+// sealLinkCookie seals the handoff between the GitHub and Discord steps,
 // expiring after the configured lifetime.
 func (s *Server) sealLinkCookie(c linkCookie) (string, error) {
 	c.Expiry = time.Now().Add(s.cfg.LinkCookieLifetime)
@@ -149,13 +165,67 @@ func (s *Server) openLinkCookie(encoded string) (linkCookie, error) {
 	}
 
 	if time.Now().After(c.Expiry) {
-		return linkCookie{}, errLinkCookieExpired
+		return linkCookie{}, linkExpiredf("cookie")
 	}
 
 	return c, nil
 }
 
-// newNonce returns a random, URL-safe value used as the OAuth state nonce.
+// sealLinkStateCookie seals the browser binding, expiring after the configured lifetime.
+func (s *Server) sealLinkStateCookie(nonce string) (string, error) {
+	payload, err := json.Marshal(linkStateCookie{
+		Nonce:  nonce,
+		Expiry: time.Now().Add(s.cfg.LinkCookieLifetime),
+	})
+	if err != nil {
+		return "", fmt.Errorf("sealing link state cookie: %w", err)
+	}
+
+	sealed, err := s.browserSealer.Seal(payload, []byte(linkStateCookieAAD))
+	if err != nil {
+		return "", fmt.Errorf("sealing link state cookie: %w", err)
+	}
+
+	return base64.RawURLEncoding.EncodeToString(sealed), nil
+}
+
+// openLinkStateCookie unseals a value produced by sealLinkStateCookie.
+func (s *Server) openLinkStateCookie(encoded string) (linkStateCookie, error) {
+	sealed, err := base64.RawURLEncoding.DecodeString(encoded)
+	if err != nil {
+		return linkStateCookie{}, fmt.Errorf("decoding link state cookie: %w", err)
+	}
+
+	payload, err := s.browserSealer.Open(sealed, []byte(linkStateCookieAAD))
+	if err != nil {
+		return linkStateCookie{}, fmt.Errorf("opening link state cookie: %w", err)
+	}
+
+	var c linkStateCookie
+	if err := json.Unmarshal(payload, &c); err != nil {
+		return linkStateCookie{}, fmt.Errorf("decoding link state cookie: %w", err)
+	}
+
+	if time.Now().After(c.Expiry) {
+		return linkStateCookie{}, linkExpiredf("state cookie")
+	}
+
+	return c, nil
+}
+
+// writeLinkStateCookie sets or clears the state cookie. A negative maxAge expires it.
+func (s *Server) writeLinkStateCookie(w http.ResponseWriter, value string, maxAge int) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     linkStateCookieName,
+		Value:    value,
+		Path:     linkPath,
+		MaxAge:   maxAge,
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteLaxMode,
+	})
+}
+
 func newNonce() (string, error) {
 	b := make([]byte, 24)
 	if _, err := rand.Read(b); err != nil {
@@ -164,12 +234,12 @@ func newNonce() (string, error) {
 	return base64.RawURLEncoding.EncodeToString(b), nil
 }
 
-// writeLinkCookie sets or clears the linking cookie. A negative maxAge expires it.
+// writeLinkCookie sets or clears the handoff cookie. A negative maxAge expires it.
 func (s *Server) writeLinkCookie(w http.ResponseWriter, value string, maxAge int) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     linkCookieName,
 		Value:    value,
-		Path:     "/link",
+		Path:     linkPath,
 		MaxAge:   maxAge,
 		HttpOnly: true,
 		Secure:   true,
@@ -181,44 +251,82 @@ func (s *Server) writeLinkCookie(w http.ResponseWriter, value string, maxAge int
 func (s *Server) handleLink(w http.ResponseWriter, r *http.Request) {
 	encoded := r.URL.Query().Get("token")
 	if encoded == "" {
-		s.writeProblem(w, r, http.StatusBadRequest, linkDetailInvalidOrExpired)
+		s.writeProblem(w, r, http.StatusBadRequest, linkDetailRestart)
 		return
 	}
 
-	lt, err := s.openLinkToken(encoded)
-	if errors.Is(err, errLinkTokenExpired) {
-		s.writeProblem(w, r, http.StatusBadRequest, linkDetailExpired)
-		return
-	}
+	lt, err := s.openLinkToken(encoded, linkTokenAAD)
 	if err != nil {
 		s.logger.Warn("rejecting link token", "error", err)
-		s.writeProblem(w, r, http.StatusBadRequest, linkDetailInvalidOrExpired)
+		s.writeProblem(w, r, http.StatusBadRequest, linkDetailRestart)
 		return
 	}
 
-	state, err := s.sealLinkToken(lt)
+	nonce, err := newNonce()
+	if err != nil {
+		s.logger.Error("generating nonce", "error", err)
+		s.writeProblem(w, r, http.StatusInternalServerError, linkDetailInternal)
+		return
+	}
+
+	lt.Nonce = nonce
+
+	state, err := s.sealLinkToken(lt, linkStateAAD)
 	if err != nil {
 		s.logger.Error("sealing link state", "error", err)
 		s.writeProblem(w, r, http.StatusInternalServerError, linkDetailInternal)
 		return
 	}
 
+	sealedState, err := s.sealLinkStateCookie(nonce)
+	if err != nil {
+		s.logger.Error("sealing link state cookie", "error", err)
+		s.writeProblem(w, r, http.StatusInternalServerError, linkDetailInternal)
+		return
+	}
+
+	s.writeLinkStateCookie(w, sealedState, int(s.cfg.LinkCookieLifetime.Seconds()))
+
 	http.Redirect(w, r, s.githubClient.AuthorizeURL(state), http.StatusFound)
 }
 
 // --- GET /link/github/callback?code=...&state=... ---.
 func (s *Server) handleLinkGitHubCallback(w http.ResponseWriter, r *http.Request) {
+	// Single use: expire the cookie now; this request already carries it, and
+	// every path below must consume it, including a missing or invalid state.
+	s.writeLinkStateCookie(w, "", -1)
+
 	ctx := r.Context()
 	state := r.URL.Query().Get("state")
 	if state == "" {
-		s.writeProblem(w, r, http.StatusBadRequest, linkDetailInvalidOrExpired)
+		s.writeProblem(w, r, http.StatusBadRequest, linkDetailRestart)
 		return
 	}
 
-	lt, err := s.openLinkToken(state)
+	lt, err := s.openLinkToken(state, linkStateAAD)
 	if err != nil {
 		s.logger.Warn("rejecting github callback state", "error", err)
-		s.writeProblem(w, r, http.StatusBadRequest, linkDetailInvalidOrExpired)
+		s.writeProblem(w, r, http.StatusBadRequest, linkDetailRestart)
+		return
+	}
+
+	cookie, err := r.Cookie(linkStateCookieName)
+	if err != nil {
+		s.writeProblem(w, r, http.StatusBadRequest, linkDetailRestart)
+		return
+	}
+
+	binding, err := s.openLinkStateCookie(cookie.Value)
+	if err != nil {
+		s.logger.Warn("rejecting link state cookie", "error", err)
+		s.writeProblem(w, r, http.StatusBadRequest, linkDetailRestart)
+		return
+	}
+
+	if lt.Nonce == "" || binding.Nonce == "" ||
+		subtle.ConstantTimeCompare([]byte(binding.Nonce), []byte(lt.Nonce)) != 1 {
+		s.logger.Warn("link state nonce mismatch")
+		s.writeProblem(w, r, http.StatusBadRequest, linkDetailRestart)
 		return
 	}
 
@@ -292,7 +400,7 @@ func (s *Server) handleLinkDiscord(w http.ResponseWriter, r *http.Request) {
 	s.redirectToDiscord(w, r, lc)
 }
 
-// redirectToDiscord stores lc under a fresh state nonce in the linking cookie
+// redirectToDiscord stores lc under a fresh state nonce in the handoff cookie
 // and sends the browser to Discord's authorize page.
 func (s *Server) redirectToDiscord(w http.ResponseWriter, r *http.Request, lc linkCookie) {
 	nonce, err := newNonce()
@@ -341,7 +449,7 @@ func (s *Server) handleLinkDiscordCallback(w http.ResponseWriter, r *http.Reques
 	}
 
 	state := r.URL.Query().Get("state")
-	if subtle.ConstantTimeCompare([]byte(state), []byte(lc.Nonce)) != 1 {
+	if state == "" || lc.Nonce == "" || subtle.ConstantTimeCompare([]byte(state), []byte(lc.Nonce)) != 1 {
 		s.logger.Warn("link cookie nonce mismatch")
 		s.writeProblem(w, r, http.StatusBadRequest, linkDetailRestart)
 		return

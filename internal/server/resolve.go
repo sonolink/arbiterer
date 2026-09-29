@@ -48,13 +48,13 @@ type resolveResponse struct {
 // linkURL builds the link a contributor follows to connect their accounts,
 // carrying a sealed, short-lived bearer token.
 func (s *Server) linkURL(lt linkToken) (string, error) {
-	token, err := s.sealLinkToken(lt)
+	token, err := s.sealLinkToken(lt, linkTokenAAD)
 	if err != nil {
 		return "", fmt.Errorf("building link url: %w", err)
 	}
 
 	u := url.URL{
-		Path: "/link",
+		Path: linkPath,
 		RawQuery: url.Values{
 			"token": {token},
 		}.Encode(),
