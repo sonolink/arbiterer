@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -16,6 +17,8 @@ import (
 	"github.com/sonolink/arbiterer/internal/github"
 	"github.com/sonolink/arbiterer/internal/storage"
 )
+
+const maxRequestBytes = 1 << 20
 
 type resolveRequest struct {
 	GitHubUserID string `json:"github_user_id"`
@@ -352,8 +355,19 @@ func (s *Server) handleResolve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	body, err := io.ReadAll(io.LimitReader(r.Body, maxRequestBytes+1))
+	if err != nil {
+		s.writeProblem(w, r, http.StatusBadRequest, "reading request body")
+		return
+	}
+
+	if len(body) > maxRequestBytes {
+		s.writeProblem(w, r, http.StatusRequestEntityTooLarge, "request body too large")
+		return
+	}
+
 	var req resolveRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := json.Unmarshal(body, &req); err != nil {
 		s.writeProblem(w, r, http.StatusBadRequest, "invalid request body")
 		return
 	}
