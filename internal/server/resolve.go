@@ -1,6 +1,7 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -90,42 +91,129 @@ const (
 	// tokenStoreBackoff is the wait after the first failed store, doubling with
 	// each further attempt.
 	tokenStoreBackoff = 50 * time.Millisecond
+
+	// rotationPolls is how many times a losing refresh re-reads the stored grant
+	// before concluding it really is revoked.
+	rotationPolls = 4
+
+	// rotationPollDelay is how long to wait between those re-reads.
+	rotationPollDelay = 75 * time.Millisecond
+
+	// refreshAttempts bounds a resolve that keeps losing the rotation race.
+	refreshAttempts = 3
 )
+
+// openAccessToken unseals the access token stored for a Discord account.
+func (s *Server) openAccessToken(user *storage.DiscordUser) (string, error) {
+	accessToken, err := s.storageSealer.Open(
+		user.EncryptedAccessToken,
+		tokenAAD(user.ID, aadFieldAccess),
+	)
+	if err != nil {
+		return "", fmt.Errorf("opening access token: %w", err)
+	}
+
+	return string(accessToken), nil
+}
 
 func (s *Server) accessToken(ctx context.Context, user *storage.DiscordUser) (string, error) {
 	if time.Until(user.TokenExpiresAt) > refreshSkew {
-		accessToken, err := s.storageSealer.Open(
-			user.EncryptedAccessToken,
-			tokenAAD(user.ID, aadFieldAccess),
+		return s.openAccessToken(user)
+	}
+
+	return s.refreshedAccessToken(ctx, user)
+}
+
+// refreshedAccessToken exchanges the stored refresh token for a new grant.
+// https://github.com/discord/discord-api-docs/issues/5942
+func (s *Server) refreshedAccessToken(ctx context.Context, user *storage.DiscordUser) (string, error) {
+	for attempt := 1; ; attempt++ {
+		refreshToken, err := s.storageSealer.Open(
+			user.EncryptedRefreshToken,
+			tokenAAD(user.ID, aadFieldRefresh),
 		)
 		if err != nil {
-			return "", fmt.Errorf("opening access token: %w", err)
+			return "", fmt.Errorf("opening refresh token: %w", err)
 		}
 
-		return string(accessToken), nil
-	}
+		token, err := s.discordClient.Refresh(ctx, string(refreshToken))
+		if err == nil {
+			return s.storeRefreshedGrant(ctx, user, token)
+		}
 
-	refreshToken, err := s.storageSealer.Open(
-		user.EncryptedRefreshToken,
-		tokenAAD(user.ID, aadFieldRefresh),
-	)
-	if err != nil {
-		return "", fmt.Errorf("opening refresh token: %w", err)
-	}
-
-	token, err := s.discordClient.Refresh(ctx, string(refreshToken))
-	if err != nil {
 		// Only invalid_grant means the stored grant is no longer usable. The
 		// other OAuth error codes report a misconfigured client, which is our
 		// problem, not the user's.
 		var oauthErr *discord.OAuthError
-		if errors.As(err, &oauthErr) && oauthErr.Code == "invalid_grant" {
+		if !errors.As(err, &oauthErr) || oauthErr.Code != "invalid_grant" {
+			return "", fmt.Errorf("refreshing token: %w", err)
+		}
+
+		if attempt >= refreshAttempts {
 			return "", errReauthRequired
 		}
 
-		return "", fmt.Errorf("refreshing token: %w", err)
+		rotated, err := s.readRotatedUser(ctx, user)
+		if errors.Is(err, storage.ErrNotFound) {
+			return "", errReauthRequired
+		}
+
+		if err != nil {
+			return "", fmt.Errorf("re-reading discord user: %w", err)
+		}
+
+		if rotated == nil {
+			return "", errReauthRequired
+		}
+
+		s.logger.Info(
+			"concurrent token refresh detected, adopting the rotated grant",
+			"discord_user_id", user.ID,
+			"attempt", attempt+1,
+		)
+
+		*user = *rotated
+		if time.Until(user.TokenExpiresAt) > refreshSkew {
+			return s.openAccessToken(user)
+		}
+
+		continue
+	}
+}
+
+// readRotatedUser re-reads a Discord account, returning it if a concurrent
+// resolve rotated its grant and nil if it did not.
+func (s *Server) readRotatedUser(
+	ctx context.Context,
+	stale *storage.DiscordUser,
+) (*storage.DiscordUser, error) {
+	for range rotationPolls {
+		current, err := s.store.DiscordUserByID(ctx, stale.ID)
+		if err != nil {
+			return nil, err
+		}
+
+		if !bytes.Equal(current.EncryptedRefreshToken, stale.EncryptedRefreshToken) {
+			return current, nil
+		}
+
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-time.After(rotationPollDelay):
+		}
 	}
 
+	return nil, nil
+}
+
+// storeRefreshedGrant seals a newly issued grant, stores it against the user,
+// and returns its access token.
+func (s *Server) storeRefreshedGrant(
+	ctx context.Context,
+	user *storage.DiscordUser,
+	token *discord.Token,
+) (string, error) {
 	sealedAccessToken, err := s.storageSealer.Seal(
 		[]byte(token.AccessToken),
 		tokenAAD(user.ID, aadFieldAccess),
@@ -146,8 +234,8 @@ func (s *Server) accessToken(ctx context.Context, user *storage.DiscordUser) (st
 	user.EncryptedRefreshToken = sealedRefreshToken
 	user.TokenExpiresAt = token.ExpiresAt
 
-	// Discord has already invalidated the old refresh token, so this write has to outlive
-	// the request that triggered it.
+	// Discord has already invalidated the token this grant replaced, so the
+	// write has to outlive the request that triggered it.
 	storeCtx, cancel := context.WithTimeout(
 		context.WithoutCancel(ctx),
 		tokenStoreTimeout,

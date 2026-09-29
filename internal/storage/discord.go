@@ -55,6 +55,34 @@ func (s *Store) DiscordUserByConnection(
 	return &user, nil
 }
 
+// DiscordUserByID returns the Discord account with the given ID, or ErrNotFound
+// when no such account exists.
+func (s *Store) DiscordUserByID(ctx context.Context, id int64) (*DiscordUser, error) {
+	const query = `
+		SELECT id, encrypted_access_token, encrypted_refresh_token, token_expires_at
+		FROM discord_users
+		WHERE id = $1`
+
+	var user DiscordUser
+
+	err := s.pool.QueryRow(ctx, query, id).Scan(
+		&user.ID,
+		&user.EncryptedAccessToken,
+		&user.EncryptedRefreshToken,
+		&user.TokenExpiresAt,
+	)
+
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+
+	if err != nil {
+		return nil, fmt.Errorf("storage: discord user by id: %w", err)
+	}
+
+	return &user, nil
+}
+
 // UpdateDiscordUserTokens replaces the stored credentials of a Discord account with the
 // ones held by the user.
 func (s *Store) UpdateDiscordUserTokens(ctx context.Context, user *DiscordUser) error {
