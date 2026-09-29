@@ -339,7 +339,7 @@ func (s *Server) handleLinkDiscordCallback(w http.ResponseWriter, r *http.Reques
 	code := r.URL.Query().Get("code")
 	token, err := s.discordClient.Exchange(ctx, code)
 	if err != nil {
-		s.logger.Error("discord ouath exchange failed", "error", err)
+		s.logger.Error("discord oauth exchange failed", "error", err)
 		s.writeProblem(w, r, http.StatusBadRequest, linkDetailDiscordAuth)
 		return
 	}
