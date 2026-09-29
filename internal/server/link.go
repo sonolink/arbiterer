@@ -45,7 +45,10 @@ const (
 	linkDetailInternal         = "Something went wrong. Please try again."
 )
 
-var errLinkExpired = errors.New("link token expired")
+var (
+	errLinkTokenExpired  = errors.New("link token expired")
+	errLinkCookieExpired = errors.New("link cookie expired")
+)
 
 // linkToken is the sealed payload carried through the URL from /v1/resolve.
 type linkToken struct {
@@ -59,12 +62,13 @@ type linkToken struct {
 
 // linkCookie is the sealed payload carried between the GitHub and Discord.
 type linkCookie struct {
-	Nonce        string `json:"nonce"`
-	RepositoryID int64  `json:"repository_id"`
-	GitHubUserID string `json:"github_user_id"`
-	Repository   string `json:"repository"`
-	IssueNumber  int64  `json:"issue_number"`
-	GuildID      string `json:"guild_id,omitempty"`
+	Nonce        string    `json:"nonce"`
+	RepositoryID int64     `json:"repository_id"`
+	GitHubUserID string    `json:"github_user_id"`
+	Repository   string    `json:"repository"`
+	IssueNumber  int64     `json:"issue_number"`
+	GuildID      string    `json:"guild_id,omitempty"`
+	Expiry       time.Time `json:"expiry"`
 }
 
 // sealLinkToken produces a URL-safe bearer token for a resolving link,
@@ -103,14 +107,17 @@ func (s *Server) openLinkToken(encoded string) (linkToken, error) {
 	}
 
 	if time.Now().After(lt.Expiry) {
-		return linkToken{}, errLinkExpired
+		return linkToken{}, errLinkTokenExpired
 	}
 
 	return lt, nil
 }
 
-// sealLinkCookie seals the handoff between the GitHub and Discord.
+// sealLinkCookie seals the handoff between the GitHub and Discord,
+// expiring after the configured lifetime.
 func (s *Server) sealLinkCookie(c linkCookie) (string, error) {
+	c.Expiry = time.Now().Add(s.cfg.LinkCookieLifetime)
+
 	payload, err := json.Marshal(c)
 	if err != nil {
 		return "", fmt.Errorf("sealing link cookie: %w", err)
@@ -139,6 +146,10 @@ func (s *Server) openLinkCookie(encoded string) (linkCookie, error) {
 	var c linkCookie
 	if err := json.Unmarshal(payload, &c); err != nil {
 		return linkCookie{}, fmt.Errorf("decoding link cookie: %w", err)
+	}
+
+	if time.Now().After(c.Expiry) {
+		return linkCookie{}, errLinkCookieExpired
 	}
 
 	return c, nil
@@ -175,7 +186,7 @@ func (s *Server) handleLink(w http.ResponseWriter, r *http.Request) {
 	}
 
 	lt, err := s.openLinkToken(encoded)
-	if errors.Is(err, errLinkExpired) {
+	if errors.Is(err, errLinkTokenExpired) {
 		s.writeProblem(w, r, http.StatusBadRequest, linkDetailExpired)
 		return
 	}
