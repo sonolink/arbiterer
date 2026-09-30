@@ -30,15 +30,29 @@ const timeoutMs = 30000; // 30 seconds
  * @returns {Promise<void>}
  */
 module.exports = async function resolve({ core, context }) {
-  const userId = context.payload.pull_request
-    ? context.payload.pull_request.user?.id
-    : context.payload.sender?.id;
-  const issueNumber = context.payload.pull_request?.number;
-
-  if (!userId) {
-    throw new Error('Cannot determine the GitHub user ID from the workflow event.');
+  if (context.eventName !== 'pull_request' && context.eventName !== 'pull_request_target') {
+    core.info(`Skipping: event "${context.eventName}" is not a pull request.`);
+    return;
   }
 
+  const data = /** @type {import('@octokit/openapi-webhooks-types').components['schemas']['pull-request'] | undefined} */ (
+    context.payload.pull_request
+  );
+  if (!data) {
+    throw new Error('Missing pull_request data in the workflow event payload.');
+  }
+
+  const user = data.user;
+  if (!user) {
+    throw new Error('Missing pull_request.user data in the workflow event payload.');
+  }
+  if (user.login === 'ghost' || user.type !== 'User') {
+    core.info(`Skipping: pull request author is not a valid GitHub user (login: ${user.login}, type: ${user.type}).`);
+    return;
+  }
+  
+  const userId = user.id;
+  const issueNumber = data.number;
   const oidcToken = await core.getIDToken(audience);
 
   const body = JSON.stringify({
@@ -106,7 +120,7 @@ module.exports = async function resolve({ core, context }) {
     throw new Error('Server returned an invalid JSON response.');
   });
 
-  if (typeof result.status !== 'string' || !result.status) {
+  if (typeof result?.status !== 'string' || !result.status) {
     throw new Error('Server returned an invalid status.');
   }
 
