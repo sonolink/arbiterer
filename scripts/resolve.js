@@ -2,6 +2,7 @@ const audience = process.env.ARBITERER_OIDC_AUDIENCE?.trim() || 'https://arbiter
 const serverUrl = process.env.ARBITERER_SERVER_URL?.trim() || 'https://api.arbiterer.com/v1';
 const maxRetries = Number(process.env.ARBITERER_ERROR_MAX_RETRIES?.trim() || 3);
 const failOnMissingApp = process.env.ARBITERER_FAIL_ON_MISSING_APP?.trim().toLowerCase() === 'true';
+const commentOnLinked = process.env.ARBITERER_COMMENT_ON_LINKED?.trim().toLowerCase() !== 'false';
 
 const guildId = process.env.ARBITERER_GUILD_ID?.trim() || undefined;
 
@@ -59,6 +60,7 @@ module.exports = async function resolve({ core, context }) {
     github_user_id: String(userId),
     ...(guildId ? { guild_id: guildId } : {}),
     ...(issueNumber ? { issue_number: issueNumber } : {}),
+    ...(commentOnLinked ? {} : { skip_linked_comment: true }),
   });
 
   let response;

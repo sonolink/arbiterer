@@ -53,7 +53,7 @@ func setupSteps(status commentStatus, linkURL string, requiresMembership bool) [
 
 	switch status {
 	case commentLinked:
-		// Nothing left to do; the comment only exists to clear an earlier ask.
+		// Nothing left to do; the comment confirms the link or clears an earlier ask.
 		signInGitHub.done = true
 		signInDiscord.done = true
 		joinServer.done = true
@@ -113,10 +113,16 @@ func formatCommentBody(author string, status commentStatus, linkURL string, requ
 
 // setupCommentNeedsWrite reports whether the setup comment has to be posted or
 // updated. A linked contributor needs no comment unless an earlier one asked
-// them to act, and a comment without a link to refresh only changes with the status.
-func setupCommentNeedsWrite(stored *storage.SetupComment, status commentStatus, linkURL string) bool {
+// them to act or has opted in to a comment confirming the link, and a comment
+// without a link to refresh only changes with the status.
+func setupCommentNeedsWrite(
+	stored *storage.SetupComment,
+	status commentStatus,
+	linkURL string,
+	commentOnLinked bool,
+) bool {
 	if stored == nil {
-		return status != commentLinked
+		return status != commentLinked || commentOnLinked
 	}
 
 	return stored.Status != string(status) || linkURL != ""
@@ -124,7 +130,8 @@ func setupCommentNeedsWrite(stored *storage.SetupComment, status commentStatus, 
 
 // syncSetupComment reconciles the comment telling a contributor what they
 // need to do. It does nothing outside a pull request. requiresMembership adds
-// the step of joining the check's Discord server.
+// the step of joining the check's Discord server. commentOnLinked posts a comment
+// confirming the link when a linked contributor has none yet.
 func (s *Server) syncSetupComment(
 	ctx context.Context,
 	repositoryID int64,
@@ -133,6 +140,7 @@ func (s *Server) syncSetupComment(
 	status commentStatus,
 	linkURL string,
 	requiresMembership bool,
+	commentOnLinked bool,
 ) error {
 	if issueNumber == 0 {
 		return nil
@@ -143,7 +151,7 @@ func (s *Server) syncSetupComment(
 		return fmt.Errorf("looking up setup comment: %w", err)
 	}
 
-	if !setupCommentNeedsWrite(stored, status, linkURL) {
+	if !setupCommentNeedsWrite(stored, status, linkURL, commentOnLinked) {
 		return nil
 	}
 

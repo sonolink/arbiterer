@@ -12,6 +12,11 @@ inputs:
       Without the app, Arbiterer cannot post the setup comment telling the pull request author how to link their accounts.
     required: false
     default: 'false'
+  comment-on-linked:
+    description: Post a comment on the pull request confirming that the author is already linked. Set to false to only
+      comment when the author still has to act. A comment that earlier asked them to act is always updated.
+    required: false
+    default: 'true'
 outputs:
   status:
     description: Account link status returned by Arbiterer.
@@ -32,6 +37,7 @@ runs:
         ARBITERER_ACTION_PATH: ${{ github.action_path }}
         ARBITERER_GUILD_ID: ${{ inputs.guild-id }}
         ARBITERER_FAIL_ON_MISSING_APP: ${{ inputs.fail-on-missing-app }}
+        ARBITERER_COMMENT_ON_LINKED: ${{ inputs.comment-on-linked }}
       with:
         script: |
           const path = require('path');

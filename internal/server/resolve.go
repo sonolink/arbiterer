@@ -21,9 +21,10 @@ import (
 const maxRequestBytes = 1 << 20
 
 type resolveRequest struct {
-	GitHubUserID string `json:"github_user_id"`
-	GuildID      string `json:"guild_id"`
-	IssueNumber  int64  `json:"issue_number"` // GitHub's API addresses PRs as issues.
+	GitHubUserID      string `json:"github_user_id"`
+	GuildID           string `json:"guild_id"`
+	IssueNumber       int64  `json:"issue_number"`        // GitHub's API addresses PRs as issues.
+	SkipLinkedComment bool   `json:"skip_linked_comment"` // Whether to post a comment if the contributor is already linked.
 }
 
 type resolveStatus string
@@ -384,11 +385,12 @@ func (s *Server) handleResolve(w http.ResponseWriter, r *http.Request) {
 	)
 
 	lt := linkToken{
-		GitHubUserID: req.GitHubUserID,
-		RepositoryID: claims.RepositoryID,
-		Repository:   claims.Repository,
-		IssueNumber:  req.IssueNumber,
-		GuildID:      req.GuildID,
+		GitHubUserID:      req.GitHubUserID,
+		RepositoryID:      claims.RepositoryID,
+		Repository:        claims.Repository,
+		IssueNumber:       req.IssueNumber,
+		GuildID:           req.GuildID,
+		SkipLinkedComment: req.SkipLinkedComment,
 	}
 
 	var resp resolveResponse
@@ -431,6 +433,7 @@ func (s *Server) handleResolve(w http.ResponseWriter, r *http.Request) {
 		commentStatusFor(resp.Status),
 		resp.LinkURL,
 		req.GuildID != "",
+		!req.SkipLinkedComment,
 	); err != nil {
 		s.logSetupCommentError(err)
 

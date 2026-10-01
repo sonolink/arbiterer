@@ -61,24 +61,26 @@ func linkExpiredf(part string) error {
 
 // linkToken is the sealed payload carried through the URL from /v1/resolve.
 type linkToken struct {
-	GitHubUserID string    `json:"github_user_id"`
-	RepositoryID int64     `json:"repository_id"`
-	Repository   string    `json:"repository"`
-	IssueNumber  int64     `json:"issue_number"`
-	GuildID      string    `json:"guild_id,omitempty"`
-	Nonce        string    `json:"nonce,omitempty"`
-	Expiry       time.Time `json:"expiry"`
+	GitHubUserID      string    `json:"github_user_id"`
+	RepositoryID      int64     `json:"repository_id"`
+	Repository        string    `json:"repository"`
+	IssueNumber       int64     `json:"issue_number"`
+	GuildID           string    `json:"guild_id,omitempty"`
+	Nonce             string    `json:"nonce,omitempty"`
+	Expiry            time.Time `json:"expiry"`
+	SkipLinkedComment bool      `json:"skip_linked_comment,omitempty"`
 }
 
 // linkCookie is the sealed handoff from the GitHub step to the Discord step.
 type linkCookie struct {
-	Nonce        string    `json:"nonce"`
-	RepositoryID int64     `json:"repository_id"`
-	GitHubUserID string    `json:"github_user_id"`
-	Repository   string    `json:"repository"`
-	IssueNumber  int64     `json:"issue_number"`
-	GuildID      string    `json:"guild_id,omitempty"`
-	Expiry       time.Time `json:"expiry"`
+	Nonce             string    `json:"nonce"`
+	RepositoryID      int64     `json:"repository_id"`
+	GitHubUserID      string    `json:"github_user_id"`
+	Repository        string    `json:"repository"`
+	IssueNumber       int64     `json:"issue_number"`
+	GuildID           string    `json:"guild_id,omitempty"`
+	Expiry            time.Time `json:"expiry"`
+	SkipLinkedComment bool      `json:"skip_linked_comment,omitempty"`
 }
 
 // linkStateCookie is the sealed browser binding for the GitHub step.
@@ -356,11 +358,12 @@ func (s *Server) handleLinkGitHubCallback(w http.ResponseWriter, r *http.Request
 	}
 
 	lc := linkCookie{
-		RepositoryID: lt.RepositoryID,
-		GitHubUserID: lt.GitHubUserID,
-		Repository:   lt.Repository,
-		IssueNumber:  lt.IssueNumber,
-		GuildID:      lt.GuildID,
+		RepositoryID:      lt.RepositoryID,
+		GitHubUserID:      lt.GitHubUserID,
+		Repository:        lt.Repository,
+		IssueNumber:       lt.IssueNumber,
+		GuildID:           lt.GuildID,
+		SkipLinkedComment: lt.SkipLinkedComment,
 	}
 
 	discordPath := url.URL{Path: "/link/discord"}
@@ -373,6 +376,7 @@ func (s *Server) handleLinkGitHubCallback(w http.ResponseWriter, r *http.Request
 		commentGitHubVerified,
 		discordStepURL,
 		lc.GuildID != "",
+		!lc.SkipLinkedComment,
 	); err != nil {
 		s.logSetupCommentError(err)
 	}
@@ -534,6 +538,7 @@ func (s *Server) handleLinkDiscordCallback(w http.ResponseWriter, r *http.Reques
 		s.linkedCommentStatus(ctx, token.AccessToken, lc.GuildID),
 		"",
 		lc.GuildID != "",
+		!lc.SkipLinkedComment,
 	); err != nil {
 		s.logSetupCommentError(err)
 	}
