@@ -1,6 +1,9 @@
 package config
 
 import (
+	"bytes"
+	"crypto/rsa"
+	"encoding/base64"
 	"fmt"
 	"io"
 	"log/slog"
@@ -10,6 +13,7 @@ import (
 	"time"
 
 	"github.com/caarlos0/env/v11"
+	"github.com/golang-jwt/jwt/v5"
 )
 
 // Config holds all runtime settings for the application.
@@ -18,6 +22,8 @@ type Config struct {
 	Discord  Discord
 	Postgres Postgres
 	Server   Server
+	Secrets  Secrets
+	GitHub   GitHub
 }
 
 // Load reads the full configuration from environment variables.
@@ -117,12 +123,15 @@ func (p Postgres) DSN() string {
 
 // Server holds the HTTP listener settings.
 type Server struct {
-	Host            string        `env:"SERVER_HOST"             envDefault:"127.0.0.1"`
-	Port            int           `env:"SERVER_PORT"             envDefault:"8080"`
-	ReadTimeout     time.Duration `env:"SERVER_READ_TIMEOUT"     envDefault:"5s"`
-	WriteTimeout    time.Duration `env:"SERVER_WRITE_TIMEOUT"    envDefault:"30s"`
-	IdleTimeout     time.Duration `env:"SERVER_IDLE_TIMEOUT"     envDefault:"120s"`
-	ShutdownTimeout time.Duration `env:"SERVER_SHUTDOWN_TIMEOUT" envDefault:"10s"`
+	Host               string        `env:"SERVER_HOST"             envDefault:"127.0.0.1"`
+	Port               int           `env:"SERVER_PORT"             envDefault:"8080"`
+	ReadTimeout        time.Duration `env:"SERVER_READ_TIMEOUT"     envDefault:"5s"`
+	WriteTimeout       time.Duration `env:"SERVER_WRITE_TIMEOUT"    envDefault:"30s"`
+	IdleTimeout        time.Duration `env:"SERVER_IDLE_TIMEOUT"     envDefault:"120s"`
+	ShutdownTimeout    time.Duration `env:"SERVER_SHUTDOWN_TIMEOUT" envDefault:"10s"`
+	PublicURL          string        `env:"SERVER_PUBLIC_URL,required"`
+	LinkTokenLifetime  time.Duration `env:"LINK_TOKEN_LIFETIME" envDefault:"15m"`
+	LinkCookieLifetime time.Duration `env:"LINK_COOKIE_LIFETIME" envDefault:"10m"`
 }
 
 // Addr combines host and port into a listener address.
@@ -138,4 +147,68 @@ func LoadPostgres() (Postgres, error) {
 	}
 
 	return cfg, nil
+}
+
+// keySize is the required length in bytes of a Key.
+const keySize = 32
+
+// Key is a 32 byte secret, decoded from a base64 encoded environment value.
+type Key []byte
+
+// UnmarshalText decodes a base64 encoded key and rejects it unless it is keySize bytes long.
+func (k *Key) UnmarshalText(text []byte) error {
+	key, err := base64.StdEncoding.DecodeString(string(text))
+	if err != nil {
+		return fmt.Errorf("invalid base64: %w", err)
+	}
+
+	if len(key) != keySize {
+		return fmt.Errorf("key must be %d bytes, got %d", keySize, len(key))
+	}
+
+	*k = key
+
+	return nil
+}
+
+// Secrets holds the keys used to encrypt sensitive values.
+type Secrets struct {
+	StorageKey Key `env:"STORAGE_ENCRYPTION_KEY,required"`
+	BrowserKey Key `env:"BROWSER_ENCRYPTION_KEY,required"`
+}
+
+// GitHub holds the application settings used for OAuth and OIDC.
+type GitHub struct {
+	ClientID     string        `env:"GITHUB_CLIENT_ID,required"`
+	ClientSecret string        `env:"GITHUB_CLIENT_SECRET,required"`
+	PrivateKey   RSAPrivateKey `env:"GITHUB_CLIENT_PRIVATE_KEY,required"`
+	RedirectURI  string        `env:"GITHUB_REDIRECT_URI,required"`
+	OIDCAudience string        `env:"GITHUB_OIDC_AUDIENCE,required"`
+}
+
+// RSAPrivateKey is a GitHub App's RSA private key, decoded from a PEM encoded
+// environment value, optionally base64 encoded to keep it on a single line.
+type RSAPrivateKey rsa.PrivateKey
+
+// UnmarshalText parses a PEM encoded RSA private key, base64 decoding it
+// first unless it already starts with a PEM header.
+func (k *RSAPrivateKey) UnmarshalText(text []byte) error {
+	pemBytes := bytes.TrimSpace(text)
+	if !bytes.HasPrefix(pemBytes, []byte("-----BEGIN")) {
+		decoded, err := base64.StdEncoding.DecodeString(string(pemBytes))
+		if err != nil {
+			return fmt.Errorf("invalid private key: not PEM and invalid base64: %w", err)
+		}
+
+		pemBytes = decoded
+	}
+
+	key, err := jwt.ParseRSAPrivateKeyFromPEM(pemBytes)
+	if err != nil {
+		return fmt.Errorf("invalid private key: %w", err)
+	}
+
+	*k = RSAPrivateKey(*key)
+
+	return nil
 }

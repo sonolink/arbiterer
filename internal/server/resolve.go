@@ -1,0 +1,458 @@
+package server
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"net/http"
+	"net/url"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/sonolink/arbiterer/internal/discord"
+	"github.com/sonolink/arbiterer/internal/github"
+	"github.com/sonolink/arbiterer/internal/storage"
+)
+
+const maxRequestBytes = 1 << 20
+
+type resolveRequest struct {
+	GitHubUserID      string `json:"github_user_id"`
+	GuildID           string `json:"guild_id"`
+	IssueNumber       int64  `json:"issue_number"`        // GitHub's API addresses PRs as issues.
+	SkipLinkedComment bool   `json:"skip_linked_comment"` // Whether to post a comment if the contributor is already linked.
+}
+
+type resolveStatus string
+
+const (
+	statusLinked     resolveStatus = "linked"
+	statusUnlinked   resolveStatus = "unlinked"
+	statusRevoked    resolveStatus = "revoked"
+	statusNotAMember resolveStatus = "not_a_member"
+)
+
+type resolveResponse struct {
+	Status  resolveStatus   `json:"status"`
+	Member  json.RawMessage `json:"member,omitempty"`
+	LinkURL string          `json:"link_url,omitempty"`
+
+	// AppInstallURL is set when the app is not installed on the repository, so
+	// it could not post the setup comment.
+	AppInstallURL string `json:"app_install_url,omitempty"`
+}
+
+// linkURL builds the link a contributor follows to connect their accounts,
+// carrying a sealed, short-lived bearer token.
+func (s *Server) linkURL(lt linkToken) (string, error) {
+	token, err := s.sealLinkToken(lt, linkTokenAAD)
+	if err != nil {
+		return "", fmt.Errorf("building link url: %w", err)
+	}
+
+	u := url.URL{
+		Path: linkPath,
+		RawQuery: url.Values{
+			"token": {token},
+		}.Encode(),
+	}
+
+	return strings.TrimSuffix(s.cfg.PublicURL, "/") + u.RequestURI(), nil
+}
+
+const (
+	aadFieldAccess  = "access"
+	aadFieldRefresh = "refresh"
+)
+
+// tokenAAD builds the additional data that binds a sealed token to the row and
+// column holding it. Sealing and opening a token must use the same value.
+func tokenAAD(discordUserID int64, field string) []byte {
+	return []byte(strconv.FormatInt(discordUserID, 10) + ":" + field)
+}
+
+// errReauthRequired reports that the stored Discord grant can no longer be
+// used, so the user has to authorize again.
+var errReauthRequired = errors.New("server: discord grant is no longer usable")
+
+const (
+	// refreshSkew is how early a token is treated as expired, absorbing clock differences and
+	// the round trip to Discord.
+	refreshSkew = time.Minute
+
+	// tokenStoreTimeout bounds the write that persists refreshed tokens, which
+	// must outlive the request that triggered it.
+	tokenStoreTimeout = 5 * time.Second
+
+	// tokenStoreAttempts is how many times a refreshed token is stored before the
+	// grant is treated as lost.
+	tokenStoreAttempts = 3
+
+	// tokenStoreBackoff is the wait after the first failed store, doubling with
+	// each further attempt.
+	tokenStoreBackoff = 50 * time.Millisecond
+
+	// rotationPolls is how many times a losing refresh re-reads the stored grant
+	// before concluding it really is revoked.
+	rotationPolls = 4
+
+	// rotationPollDelay is how long to wait between those re-reads.
+	rotationPollDelay = 75 * time.Millisecond
+
+	// refreshAttempts bounds a resolve that keeps losing the rotation race.
+	refreshAttempts = 3
+)
+
+// openAccessToken unseals the access token stored for a Discord account.
+func (s *Server) openAccessToken(user *storage.DiscordUser) (string, error) {
+	accessToken, err := s.storageSealer.Open(
+		user.EncryptedAccessToken,
+		tokenAAD(user.ID, aadFieldAccess),
+	)
+	if err != nil {
+		return "", fmt.Errorf("opening access token: %w", err)
+	}
+
+	return string(accessToken), nil
+}
+
+func (s *Server) accessToken(ctx context.Context, user *storage.DiscordUser) (string, error) {
+	if time.Until(user.TokenExpiresAt) > refreshSkew {
+		return s.openAccessToken(user)
+	}
+
+	return s.refreshedAccessToken(ctx, user)
+}
+
+// refreshedAccessToken exchanges the stored refresh token for a new grant.
+// https://github.com/discord/discord-api-docs/issues/5942
+func (s *Server) refreshedAccessToken(ctx context.Context, user *storage.DiscordUser) (string, error) {
+	for attempt := 1; ; attempt++ {
+		refreshToken, err := s.storageSealer.Open(
+			user.EncryptedRefreshToken,
+			tokenAAD(user.ID, aadFieldRefresh),
+		)
+		if err != nil {
+			return "", fmt.Errorf("opening refresh token: %w", err)
+		}
+
+		token, err := s.discordClient.Refresh(ctx, string(refreshToken))
+		if err == nil {
+			return s.storeRefreshedGrant(ctx, user, token)
+		}
+
+		// Only invalid_grant means the stored grant is no longer usable. The
+		// other OAuth error codes report a misconfigured client, which is our
+		// problem, not the user's.
+		var oauthErr *discord.OAuthError
+		if !errors.As(err, &oauthErr) || oauthErr.Code != "invalid_grant" {
+			return "", fmt.Errorf("refreshing token: %w", err)
+		}
+
+		if attempt >= refreshAttempts {
+			return "", errReauthRequired
+		}
+
+		rotated, err := s.readRotatedUser(ctx, user)
+		if errors.Is(err, storage.ErrNotFound) {
+			return "", errReauthRequired
+		}
+
+		if err != nil {
+			return "", fmt.Errorf("re-reading discord user: %w", err)
+		}
+
+		if rotated == nil {
+			return "", errReauthRequired
+		}
+
+		s.logger.Info(
+			"concurrent token refresh detected, adopting the rotated grant",
+			"discord_user_id", user.ID,
+			"attempt", attempt+1,
+		)
+
+		*user = *rotated
+		if time.Until(user.TokenExpiresAt) > refreshSkew {
+			return s.openAccessToken(user)
+		}
+
+		continue
+	}
+}
+
+// readRotatedUser re-reads a Discord account, returning it if a concurrent
+// resolve rotated its grant and nil if it did not.
+func (s *Server) readRotatedUser(
+	ctx context.Context,
+	stale *storage.DiscordUser,
+) (*storage.DiscordUser, error) {
+	for range rotationPolls {
+		current, err := s.store.DiscordUserByID(ctx, stale.ID)
+		if err != nil {
+			return nil, err
+		}
+
+		if !bytes.Equal(current.EncryptedRefreshToken, stale.EncryptedRefreshToken) {
+			return current, nil
+		}
+
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-time.After(rotationPollDelay):
+		}
+	}
+
+	return nil, nil
+}
+
+// storeRefreshedGrant seals a newly issued grant, stores it against the user,
+// and returns its access token.
+func (s *Server) storeRefreshedGrant(
+	ctx context.Context,
+	user *storage.DiscordUser,
+	token *discord.Token,
+) (string, error) {
+	sealedAccessToken, err := s.storageSealer.Seal(
+		[]byte(token.AccessToken),
+		tokenAAD(user.ID, aadFieldAccess),
+	)
+	if err != nil {
+		return "", fmt.Errorf("sealing access token: %w", err)
+	}
+
+	sealedRefreshToken, err := s.storageSealer.Seal(
+		[]byte(token.RefreshToken),
+		tokenAAD(user.ID, aadFieldRefresh),
+	)
+	if err != nil {
+		return "", fmt.Errorf("sealing refresh token: %w", err)
+	}
+
+	user.EncryptedAccessToken = sealedAccessToken
+	user.EncryptedRefreshToken = sealedRefreshToken
+	user.TokenExpiresAt = token.ExpiresAt
+
+	// Discord has already invalidated the token this grant replaced, so the
+	// write has to outlive the request that triggered it.
+	storeCtx, cancel := context.WithTimeout(
+		context.WithoutCancel(ctx),
+		tokenStoreTimeout,
+	)
+	defer cancel()
+
+	if err := s.storeRefreshedTokens(storeCtx, user); err != nil {
+		return "", err
+	}
+
+	return token.AccessToken, nil
+}
+
+// storeRefreshedTokens persists refreshed credentials, retrying transient
+// failures. Losing this write costs the user their grant, since Discord has
+// already invalidated the token it replaced.
+func (s *Server) storeRefreshedTokens(ctx context.Context, user *storage.DiscordUser) error {
+	var err error
+
+	backoff := tokenStoreBackoff
+
+loop:
+	for attempt := 1; attempt <= tokenStoreAttempts; attempt++ {
+		err = s.store.UpdateDiscordUserTokens(ctx, user)
+		if err == nil {
+			return nil
+		}
+
+		if errors.Is(err, storage.ErrNotFound) {
+			break
+		}
+
+		if attempt < tokenStoreAttempts {
+			select {
+			case <-ctx.Done():
+				err = ctx.Err()
+				break loop
+			case <-time.After(backoff):
+				backoff *= 2
+			}
+		}
+	}
+
+	s.logger.Error(
+		"lost refreshed discord tokens",
+		"discord_user_id", user.ID,
+		"error", err,
+	)
+
+	return fmt.Errorf("storing refreshed tokens: %w", err)
+}
+
+func (s *Server) resolveMember(
+	ctx context.Context,
+	user *storage.DiscordUser,
+	lt linkToken,
+) (resolveResponse, error) {
+	accessToken, err := s.accessToken(ctx, user)
+	if err != nil {
+		if errors.Is(err, errReauthRequired) {
+			return s.revokedResponse(lt)
+		}
+
+		return resolveResponse{}, err
+	}
+
+	member, err := s.discordClient.GuildMember(ctx, accessToken, lt.GuildID)
+	if err == nil {
+		return resolveResponse{Status: statusLinked, Member: member}, nil
+	}
+
+	var apiErr *discord.APIError
+	if !errors.As(err, &apiErr) {
+		return resolveResponse{}, fmt.Errorf("fetching guild member: %w", err)
+	}
+
+	switch apiErr.Status {
+	case http.StatusUnauthorized:
+		return s.revokedResponse(lt)
+	case http.StatusNotFound:
+		return resolveResponse{Status: statusNotAMember}, nil
+	default:
+		return resolveResponse{}, fmt.Errorf("fetching guild member: %w", err)
+	}
+}
+
+// revokedResponse builds the response served when a Discord grant is unusable,
+// pointing the user at the linking flow.
+func (s *Server) revokedResponse(lt linkToken) (resolveResponse, error) {
+	linkURL, err := s.linkURL(lt)
+	if err != nil {
+		return resolveResponse{}, err
+	}
+
+	return resolveResponse{
+		Status:  statusRevoked,
+		LinkURL: linkURL,
+	}, nil
+}
+
+func (s *Server) handleResolve(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	token, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
+	if !ok || token == "" {
+		s.writeProblem(w, r, http.StatusUnauthorized, "missing bearer token")
+		return
+	}
+
+	claims, err := s.verifier.Verify(ctx, token)
+	if err != nil {
+		s.logger.Warn("rejecting oidc token", "error", err)
+		s.writeProblem(w, r, http.StatusUnauthorized, "invalid token")
+		return
+	}
+
+	body, err := io.ReadAll(io.LimitReader(r.Body, maxRequestBytes+1))
+	if err != nil {
+		s.writeProblem(w, r, http.StatusBadRequest, "reading request body")
+		return
+	}
+
+	if len(body) > maxRequestBytes {
+		s.writeProblem(w, r, http.StatusRequestEntityTooLarge, "request body too large")
+		return
+	}
+
+	var req resolveRequest
+	if err := json.Unmarshal(body, &req); err != nil {
+		s.writeProblem(w, r, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	if req.GitHubUserID == "" {
+		s.writeProblem(w, r, http.StatusBadRequest, "github_user_id is required")
+		return
+	}
+
+	user, err := s.store.DiscordUserByConnection(
+		ctx,
+		req.GitHubUserID,
+		claims.RepositoryID,
+	)
+
+	lt := linkToken{
+		GitHubUserID:      req.GitHubUserID,
+		RepositoryID:      claims.RepositoryID,
+		Repository:        claims.Repository,
+		IssueNumber:       req.IssueNumber,
+		GuildID:           req.GuildID,
+		SkipLinkedComment: req.SkipLinkedComment,
+	}
+
+	var resp resolveResponse
+
+	switch {
+	case errors.Is(err, storage.ErrNotFound):
+		linkURL, err := s.linkURL(lt)
+		if err != nil {
+			s.logger.Error("building link url", "error", err)
+			s.writeProblem(w, r, http.StatusInternalServerError, "internal error")
+			return
+		}
+
+		resp = resolveResponse{
+			Status:  statusUnlinked,
+			LinkURL: linkURL,
+		}
+	case err != nil:
+		s.logger.Error("looking up connection", "error", err)
+		s.writeProblem(w, r, http.StatusInternalServerError, "internal error")
+
+		return
+	case req.GuildID == "":
+		resp = resolveResponse{Status: statusLinked}
+	default:
+		resp, err = s.resolveMember(ctx, user, lt)
+		if err != nil {
+			s.logger.Error("resolving member", "error", err)
+			s.writeProblem(w, r, http.StatusInternalServerError, "internal error")
+
+			return
+		}
+	}
+
+	if err := s.syncSetupComment(
+		ctx,
+		claims.RepositoryID,
+		claims.Repository,
+		req.IssueNumber,
+		commentStatusFor(resp.Status),
+		resp.LinkURL,
+		req.GuildID != "",
+		!req.SkipLinkedComment,
+	); err != nil {
+		s.logSetupCommentError(err)
+
+		if errors.Is(err, github.ErrAppNotInstalled) {
+			resp.AppInstallURL = s.appInstallURL(ctx, claims)
+		}
+	}
+
+	s.writeJSON(w, http.StatusOK, resp)
+}
+
+// appInstallURL returns the page where a maintainer installs the app on the
+// token's repository, or an empty string when it cannot be built.
+func (s *Server) appInstallURL(ctx context.Context, claims *github.Claims) string {
+	installURL, err := s.githubClient.InstallURL(ctx, claims.RepositoryOwnerID, claims.RepositoryID)
+	if err != nil {
+		s.logger.Error("building app install url", "error", err)
+		return ""
+	}
+
+	return installURL
+}

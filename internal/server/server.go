@@ -11,6 +11,8 @@ import (
 
 	"github.com/sonolink/arbiterer/internal/config"
 	"github.com/sonolink/arbiterer/internal/discord"
+	"github.com/sonolink/arbiterer/internal/github"
+	"github.com/sonolink/arbiterer/internal/secrets"
 	"github.com/sonolink/arbiterer/internal/storage"
 )
 
@@ -20,6 +22,10 @@ type Server struct {
 	logger        *slog.Logger
 	store         *storage.Store
 	discordClient *discord.Client
+	githubClient  *github.Client
+	storageSealer *secrets.Sealer
+	browserSealer *secrets.Sealer
+	verifier      *github.Verifier
 }
 
 // New builds a Server from its configuration and dependencies.
@@ -28,17 +34,30 @@ func New(
 	logger *slog.Logger,
 	store *storage.Store,
 	discordClient *discord.Client,
+	githubClient *github.Client,
+	storageSealer *secrets.Sealer,
+	browserSealer *secrets.Sealer,
+	verifier *github.Verifier,
 ) *Server {
 	return &Server{
 		cfg:           cfg,
 		logger:        logger,
 		store:         store,
 		discordClient: discordClient,
+		githubClient:  githubClient,
+		storageSealer: storageSealer,
+		browserSealer: browserSealer,
+		verifier:      verifier,
 	}
 }
 
 func (s *Server) addRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /healthz", s.handleHealth)
+	mux.HandleFunc("POST /v1/resolve", s.handleResolve)
+	mux.HandleFunc("GET /link", s.handleLink)
+	mux.HandleFunc("GET /link/github/callback", s.handleLinkGitHubCallback)
+	mux.HandleFunc("GET /link/discord", s.handleLinkDiscord)
+	mux.HandleFunc("GET /link/discord/callback", s.handleLinkDiscordCallback)
 }
 
 // Run starts the HTTP server and blocks until it stops, draining in-flight
