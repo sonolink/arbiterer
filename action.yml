@@ -11,12 +11,21 @@ inputs:
     description: Fail the step when the Arbiterer GitHub App is not installed on the repository, instead of only warning.
       Without the app, Arbiterer cannot post the setup comment telling the pull request author how to link their accounts.
     required: false
-    default: 'false'
+    default: "false"
   comment-on-linked:
     description: Post a comment on the pull request confirming that the author is already linked. Set to false to only
       comment when the author still has to act. A comment that earlier asked them to act is always updated.
     required: false
-    default: 'true'
+    default: "true"
+  rules:
+    description: >-
+      JavaScript module source defining the membership rules the pull request author must satisfy. The source runs
+      as an async function with require, core, context, github, guildId and member as its parameters, and must
+      evaluate to { rules: [{ id, description, passed, detail }] }. Write it as a bare object literal, or use
+      `return` when the script needs statements first. A rule passes only when passed is exactly true; detail is
+      optional. Use { rules: [] } to enforce linking only.
+    required: false
+    default: ""
 outputs:
   status:
     description: Account link status returned by Arbiterer.
@@ -27,6 +36,12 @@ outputs:
   member:
     description: GuildMember object if the user is a member of the server, otherwise null.
     value: ${{ steps.request.outputs.member }}
+  verdict:
+    description: "`pass` when every rule is satisfied, otherwise `fail`."
+    value: ${{ steps.request.outputs.verdict }}
+  summary:
+    description: Description of the first unsatisfied rule, when there is one.
+    value: ${{ steps.request.outputs.summary }}
 
 runs:
   using: composite
@@ -38,8 +53,9 @@ runs:
         ARBITERER_GUILD_ID: ${{ inputs.guild-id }}
         ARBITERER_FAIL_ON_MISSING_APP: ${{ inputs.fail-on-missing-app }}
         ARBITERER_COMMENT_ON_LINKED: ${{ inputs.comment-on-linked }}
+        ARBITERER_RULES: ${{ inputs.rules }}
       with:
         script: |
           const path = require('path');
           const resolve = require(path.join(process.env.ARBITERER_ACTION_PATH, 'scripts', 'resolve.js'));
-          await resolve({ core, context });
+          await resolve({ core, context, github });
