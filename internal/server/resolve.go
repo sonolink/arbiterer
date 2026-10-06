@@ -28,9 +28,9 @@ type resolveRequest struct {
 type resolveStatus string
 
 const (
-	statusLinked resolveStatus = "linked"
+	statusLinked   resolveStatus = "linked"
 	statusUnlinked resolveStatus = "unlinked"
-	statusRevoked resolveStatus = "revoked"
+	statusRevoked  resolveStatus = "revoked"
 
 	// statusNotAMember means the account is linked but not in the requested
 	// guild. Only /v1/member serves it.
