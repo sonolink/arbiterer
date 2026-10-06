@@ -10,10 +10,6 @@ A GitHub Action that lets your Discord community decide whose pull requests get 
 
 </div>
 
----
-
-Open source maintainers increasingly have to filter out unsolicited, low-quality pull requests before they can get to the ones that matter. Arbiterer gives you a way to require that contributors are part of your community first: it links their GitHub account to their Discord account and evaluates the result against rules you define whenever a pull request is opened.
-
 ## How it works
 
 1. A contributor opens a pull request.
@@ -43,9 +39,6 @@ Rules are plain JavaScript, passed to the action through the `rules` input. Your
 - `user`: the Discord [user object](https://docs.discord.com/developers/resources/user#user-object) of the PR author (account flags, MFA status, and so on).
 - `resolveMember(guildId)`: async helper that fetches the user's guild [member object](https://docs.discord.com/developers/resources/guild#guild-member-object) from the given server. Returns `null` if the author isn't a member.
 - `core`: the [GitHub Actions toolkit](https://github.com/actions/toolkit). Call `core.setFailed(message)` to fail the check; the message is shown to the contributor.
-
-> [!TIP]
-> Since rules are just code, you can check anything those objects expose: guild membership, roles, account age, display name style, or any combination.
 
 ### Example workflow
 
