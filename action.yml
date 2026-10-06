@@ -3,15 +3,11 @@ description: >-
   Resolve a GitHub user's Discord account through Arbiterer using GitHub OIDC. The calling job needs the
   `id-token: write` permission. Note: for pull requests from forks, the workflow must use `on: pull_request_target`.
 inputs:
-  guild-id:
-    description: Discord server ID to check membership in. Omit to check only the account link. The result will include a
-      GuildMember object if the user is a member of the server.
+  close-on-failure:
+    description: Close the pull request when the rules script fails it. Set to false to leave the pull
+      request open with a failing check.
     required: false
-  fail-on-missing-app:
-    description: Fail the step when the Arbiterer GitHub App is not installed on the repository, instead of only warning.
-      Without the app, Arbiterer cannot post the setup comment telling the pull request author how to link their accounts.
-    required: false
-    default: "false"
+    default: "true"
   comment-on-linked:
     description: Post a comment on the pull request confirming that the author is already linked. Set to false to only
       comment when the author still has to act. A comment that earlier asked them to act is always updated.
@@ -19,11 +15,9 @@ inputs:
     default: "true"
   rules:
     description: >-
-      JavaScript module source defining the membership rules the pull request author must satisfy. The source runs
-      as an async function with require, core, context, github, guildId and member as its parameters, and must
-      evaluate to { rules: [{ id, description, passed, detail }] }. Write it as a bare object literal, or use
-      `return` when the script needs statements first. A rule passes only when passed is exactly true; detail is
-      optional. Use { rules: [] } to enforce linking only.
+      Optional JavaScript that decides whether the pull request author passes. It runs with `user`, the
+      author's linked Discord account, and `resolveMember(guildId)`, which resolves the author's member
+      record or null. Call core.setFailed to reject. Leave empty to require only a linked Discord account.
     required: false
     default: ""
 outputs:
@@ -33,15 +27,9 @@ outputs:
   link-url:
     description: URL for linking or re-linking an account.
     value: ${{ steps.request.outputs.link-url }}
-  member:
-    description: GuildMember object if the user is a member of the server, otherwise null.
-    value: ${{ steps.request.outputs.member }}
-  verdict:
-    description: "`pass` when every rule is satisfied, otherwise `fail`."
-    value: ${{ steps.request.outputs.verdict }}
-  summary:
-    description: Description of the first unsatisfied rule, when there is one.
-    value: ${{ steps.request.outputs.summary }}
+  user:
+    description: Raw Discord user object if the author has linked their account, otherwise null.
+    value: ${{ steps.request.outputs.user }}
 
 runs:
   using: composite
@@ -50,8 +38,7 @@ runs:
       uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
       env:
         ARBITERER_ACTION_PATH: ${{ github.action_path }}
-        ARBITERER_GUILD_ID: ${{ inputs.guild-id }}
-        ARBITERER_FAIL_ON_MISSING_APP: ${{ inputs.fail-on-missing-app }}
+        ARBITERER_CLOSE_ON_FAILURE: ${{ inputs.close-on-failure }}
         ARBITERER_COMMENT_ON_LINKED: ${{ inputs.comment-on-linked }}
         ARBITERER_RULES: ${{ inputs.rules }}
       with:
