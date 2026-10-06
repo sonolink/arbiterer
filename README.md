@@ -38,7 +38,7 @@ Rules are plain JavaScript, passed to the action through the `rules` input. Your
 
 - `user`: the Discord [user object](https://docs.discord.com/developers/resources/user#user-object) of the PR author (account flags, MFA status, and so on).
 - `resolveMember(guildId)`: async helper that fetches the user's guild [member object](https://docs.discord.com/developers/resources/guild#guild-member-object) from the given server. Returns `null` if the author isn't a member.
-- `core`: the [GitHub Actions toolkit](https://github.com/actions/toolkit). Call `core.setFailed(message)` to fail the check; the message is shown to the contributor.
+- `core`: the [GitHub Actions toolkit](https://github.com/actions/toolkit). Call `core.setFailed(message)` to fail the check and show the message to the contributor.
 
 ## Example workflow
 
@@ -90,9 +90,6 @@ This example requires the author to:
 1. Have two-factor auth enabled on Discord.
 2. Be a member of a specific guild.
 3. Have been in the guild for more than a week.
-
-> [!NOTE]
-> To only require account linking, omit the `rules` input entirely.
 
 ## License
 
