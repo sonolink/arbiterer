@@ -5,8 +5,8 @@
 A GitHub Action that checks PR authors against your Discord server.
 
 [![License](https://img.shields.io/github/license/sonolink/arbiterer)](LICENSE)
-<!--[![CI](https://github.com/sonolink/arbiterer/actions/workflows/ci.yml/badge.svg)](https://github.com/sonolink/arbiterer/actions/workflows/ci.yml)-->
 [![Discord](https://img.shields.io/discord/1471146455002775624?label=discord)](https://discord.gg/tPHVWBPedt)
+<!--[![CI](https://github.com/sonolink/arbiterer/actions/workflows/ci.yml/badge.svg)](https://github.com/sonolink/arbiterer/actions/workflows/ci.yml)-->
 
 </div>
 
