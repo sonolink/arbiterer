@@ -40,7 +40,7 @@ Rules are plain JavaScript, passed to the action through the `rules` input. Your
 - `resolveMember(guildId)`: async helper that fetches the user's guild [member object](https://docs.discord.com/developers/resources/guild#guild-member-object) from the given server. Returns `null` if the author isn't a member.
 - `core`: the [GitHub Actions toolkit](https://github.com/actions/toolkit). Call `core.setFailed(message)` to fail the check; the message is shown to the contributor.
 
-### Example workflow
+## Example workflow
 
 > [!WARNING]
 > Use `pull_request_target` so the workflow (and your rules) always run from your default branch, and never check out or execute the pull request's code in the same job.
