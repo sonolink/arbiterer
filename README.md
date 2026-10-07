@@ -34,6 +34,9 @@ Install the [Arbiterer GitHub App](https://github.com/apps/arbiterer) on your re
 
 Add a workflow to `.github/workflows/`:
 
+> [!WARNING]
+> Use `pull_request_target`, so the workflow and your rules always run from your default branch. Never check out or execute the pull request's code in the same job, since that would run untrusted code with access to your repository's permissions and secrets.
+
 ```yaml
 name: Arbiterer
 
@@ -58,18 +61,15 @@ jobs:
 
 Drop the `with` block entirely if authors only need to link their accounts.
 
-> [!WARNING]
-> Use `pull_request_target`, and never check out or execute the pull request's code in the same job.
-
 ### Rules
 
 The `rules` input is a JavaScript snippet run once per pull request. It has access to:
 
-| Name                     | Description                                                                                                                                                                    |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `user`                   | The author's Discord [user object](https://docs.discord.com/developers/resources/user#user-object) (flags, MFA status, etc.).                                                  |
-| `resolveMember(guildId)` | Async method that returns the author's [guild member object](https://docs.discord.com/developers/resources/guild#guild-member-object), or `null` if they aren't in the server. |
-| `core`                   | The [GitHub Actions toolkit](https://github.com/actions/toolkit). Call `core.setFailed(message)` to fail the check and show `message` to the contributor.                      |
+| Name                     | Description                                                                                                                                                         |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `user`                   | The author's Discord [user object](https://docs.discord.com/developers/resources/user#user-object) (flags, MFA status, etc.).                                       |
+| `resolveMember(guildId)` | Async. Returns the author's [guild member object](https://docs.discord.com/developers/resources/guild#guild-member-object), or `null` if they aren't in the server. |
+| `core`                   | The [GitHub Actions toolkit](https://github.com/actions/toolkit). Call `core.setFailed(message)` to fail the check and show `message` to the contributor.           |
 
 For example, to require MFA, guild membership, and a week of tenure:
 
