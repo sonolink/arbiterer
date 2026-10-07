@@ -55,15 +55,6 @@ func (s *Server) decodeBody(w http.ResponseWriter, r *http.Request, dst any) boo
 
 // validGuildID reports whether id looks like a Discord snowflake.
 func validGuildID(id string) bool {
-	if id == "" || len(id) > 24 {
-		return false
-	}
-
-	for _, r := range id {
-		if r < '0' || r > '9' {
-			return false
-		}
-	}
-
-	return true
+	_, err := strconv.ParseUint(id, 10, 64)
+	return err != nil
 }
