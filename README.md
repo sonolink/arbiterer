@@ -53,7 +53,7 @@ jobs:
   arbiterer:
     runs-on: ubuntu-latest
     steps:
-      - uses: sonolink/arbiterer@v1.0.0
+      - uses: sonolink/arbiterer@v1
         with:
           rules: |
             // Optional. Plain JavaScript, see "Rules" below.
@@ -77,7 +77,7 @@ For example, to require MFA, guild membership, and a week of tenure:
 - uses: sonolink/arbiterer@v1.0.0
   with:
     rules: |
-      const GUILD = "112233445566778899";
+      const GUILD = "1471146455002775624";
       const weekMs = 7 * 24 * 60 * 60 * 1000;
 
       if (!user.mfa_enabled) {
@@ -105,7 +105,7 @@ Apache License 2.0. See the [License File](LICENSE).
 <br>
 
 <p align="center">
-	<img src="https://raw.githubusercontent.com/catppuccin/catppuccin/main/assets/footers/gray0_ctp_on_line.svg?sanitize=true" />
+ <img src="https://raw.githubusercontent.com/catppuccin/catppuccin/main/assets/footers/gray0_ctp_on_line.svg?sanitize=true" />
 </p>
 
 <p align="center">
