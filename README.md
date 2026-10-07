@@ -35,7 +35,7 @@ Install the [Arbiterer GitHub App](https://github.com/apps/arbiterer) on your re
 Add a workflow to `.github/workflows/`:
 
 > [!WARNING]
-> Use `pull_request_target`, so the workflow and your rules always run from your default branch. Never check out or execute the pull request's code in the same job, since that would run untrusted code with access to your repository's permissions and secrets.
+> Use `pull_request_target` for pull requests from forks, so the workflow and your rules always run from your default branch.
 
 ```yaml
 name: Arbiterer
