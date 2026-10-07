@@ -310,7 +310,7 @@ func (s *Server) resolveUser(
 		return resolveResponse{}, err
 	}
 
-	raw, err := s.discordClient.MeRaw(ctx, accessToken)
+	me, err := s.discordClient.Me(ctx, accessToken)
 	if err != nil {
 		var apiErr *discord.APIError
 		if errors.As(err, &apiErr) && apiErr.Status == http.StatusUnauthorized {
@@ -320,7 +320,7 @@ func (s *Server) resolveUser(
 		return resolveResponse{}, fmt.Errorf("fetching discord user: %w", err)
 	}
 
-	return resolveResponse{Status: statusLinked, User: raw}, nil
+	return resolveResponse{Status: statusLinked, User: me.Raw}, nil
 }
 
 // revokedResponse builds the response served when a Discord grant is unusable,

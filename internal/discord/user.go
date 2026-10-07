@@ -8,9 +8,10 @@ import (
 	"net/url"
 )
 
-// User is a minimal view of a Discord user, holding just the id.
+// User is the parsed view of the Discord user.
 type User struct {
-	ID string `json:"id"`
+	ID  string          `json:"id"`
+	Raw json.RawMessage `json:"-"`
 }
 
 // Me returns the data of the user behind the given access token.
@@ -25,12 +26,9 @@ func (c *Client) Me(ctx context.Context, accessToken string) (*User, error) {
 		return nil, fmt.Errorf("discord: decoding user: %w (body: %.200q)", err, body)
 	}
 
-	return &user, nil
-}
+	user.Raw = body
 
-// MeRaw returns the user behind the given access token as raw JSON.
-func (c *Client) MeRaw(ctx context.Context, accessToken string) (json.RawMessage, error) {
-	return c.get(ctx, accessToken, "/users/@me", "user")
+	return &user, nil
 }
 
 // GuildMember returns the member record as JSON. It stays raw so callers can
