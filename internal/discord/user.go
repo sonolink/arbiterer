@@ -8,14 +8,15 @@ import (
 	"net/url"
 )
 
-// User is a minimal view of a Discord user, holding just the id.
+// User is the parsed view of the Discord user.
 type User struct {
-	ID string `json:"id"`
+	ID  string          `json:"id"`
+	Raw json.RawMessage `json:"-"`
 }
 
 // Me returns the data of the user behind the given access token.
 func (c *Client) Me(ctx context.Context, accessToken string) (*User, error) {
-	body, err := c.get(ctx, accessToken, "/users/@me")
+	body, err := c.get(ctx, accessToken, "/users/@me", "user")
 	if err != nil {
 		return nil, err
 	}
@@ -25,29 +26,29 @@ func (c *Client) Me(ctx context.Context, accessToken string) (*User, error) {
 		return nil, fmt.Errorf("discord: decoding user: %w (body: %.200q)", err, body)
 	}
 
+	user.Raw = body
+
 	return &user, nil
 }
 
-// GuildMember returns the raw member record as JSON. It stays raw so callers
-// can pick the fields they need without this package guessing the schema.
+// GuildMember returns the member record as JSON. It stays raw so callers can
+// pick the fields they need without this package guessing the schema.
 func (c *Client) GuildMember(ctx context.Context, accessToken, guildID string) (json.RawMessage, error) {
-	body, err := c.get(
+	return c.get(
 		ctx,
 		accessToken,
 		"/users/@me/guilds/"+url.PathEscape(guildID)+"/member",
+		"member",
 	)
-	if err != nil {
-		return nil, err
-	}
-
-	if !json.Valid(body) {
-		return nil, fmt.Errorf("discord: member response is not valid JSON (body: %.200q)", body)
-	}
-
-	return body, nil
 }
 
-func (c *Client) get(ctx context.Context, accessToken, path string) ([]byte, error) {
+// get reads a JSON endpoint, handling status codes and rejecting a body that will not decode.
+func (c *Client) get(
+	ctx context.Context,
+	accessToken,
+	path,
+	what string,
+) (json.RawMessage, error) {
 	req, err := c.newRequest(ctx, http.MethodGet, path, nil)
 	if err != nil {
 		return nil, err
@@ -72,6 +73,10 @@ func (c *Client) get(ctx context.Context, accessToken, path string) ([]byte, err
 
 	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
 		return nil, parseAPIError(resp.StatusCode, body)
+	}
+
+	if !json.Valid(body) {
+		return nil, fmt.Errorf("discord: %s response is not valid JSON (body: %.200q)", what, body)
 	}
 
 	return body, nil

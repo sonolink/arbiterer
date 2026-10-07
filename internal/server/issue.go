@@ -25,40 +25,19 @@ const (
 	// has not yet authorized Discord. It is never served by resolve.
 	commentGitHubVerified commentStatus = "github_verified"
 
-	commentUnlinked   commentStatus = "unlinked"
-	commentLinked     commentStatus = "linked"
-	commentRevoked    commentStatus = "revoked"
-	commentNotAMember commentStatus = "not_a_member"
+	commentUnlinked commentStatus = "unlinked"
+	commentLinked   commentStatus = "linked"
+	commentRevoked  commentStatus = "revoked"
 )
 
-// commentStatusFor returns the setup comment status matching a resolve status.
-func commentStatusFor(status resolveStatus) commentStatus {
-	switch status {
-	case statusLinked:
-		return commentLinked
-	case statusRevoked:
-		return commentRevoked
-	case statusNotAMember:
-		return commentNotAMember
-	default:
-		return commentUnlinked
-	}
-}
-
 // setupSteps lists the steps a contributor must complete and links the next open step to linkURL.
-func setupSteps(status commentStatus, linkURL string, requiresMembership bool) []setupStep {
+func setupSteps(status commentStatus, linkURL string) []setupStep {
 	signInGitHub := setupStep{text: "Sign in with GitHub"}
 	signInDiscord := setupStep{text: "Sign in with Discord"}
-	joinServer := setupStep{text: "Join the required Discord server"}
 
 	switch status {
 	case commentLinked:
 		// Nothing left to do; the comment confirms the link or clears an earlier ask.
-		signInGitHub.done = true
-		signInDiscord.done = true
-		joinServer.done = true
-	case commentNotAMember:
-		// Linked already; only the server join remains, and the next run confirms it.
 		signInGitHub.done = true
 		signInDiscord.done = true
 	case commentGitHubVerified:
@@ -70,27 +49,19 @@ func setupSteps(status commentStatus, linkURL string, requiresMembership bool) [
 		signInGitHub.text = fmt.Sprintf("[%s](%s)", signInGitHub.text, linkURL)
 	}
 
-	steps := []setupStep{signInGitHub, signInDiscord}
-	if requiresMembership {
-		steps = append(steps, joinServer)
-	}
-
-	return steps
+	return []setupStep{signInGitHub, signInDiscord}
 }
 
 // formatCommentBody renders the setup comment for a contributor in the given
 // status, with completed steps struck through.
-func formatCommentBody(author string, status commentStatus, linkURL string, requiresMembership bool) string {
+func formatCommentBody(author string, status commentStatus, linkURL string) string {
 	var b strings.Builder
 
-	b.WriteString("@" + author + ", ")
+	fmt.Fprintf(&b, "@%s, ", author)
 
 	switch status {
 	case commentLinked:
 		b.WriteString("your GitHub and Discord accounts are linked.")
-	case commentNotAMember:
-		b.WriteString("your GitHub and Discord accounts are linked. " +
-			"Please join the required Discord server, then re-run the check:")
 	case commentRevoked:
 		b.WriteString("your Discord link has expired or was revoked. Please follow these steps to link it again:")
 	default:
@@ -99,7 +70,7 @@ func formatCommentBody(author string, status commentStatus, linkURL string, requ
 
 	b.WriteString("\n")
 
-	for i, step := range setupSteps(status, linkURL, requiresMembership) {
+	for i, step := range setupSteps(status, linkURL) {
 		text := step.text
 		if step.done {
 			text = "~~" + text + "~~"
@@ -128,10 +99,7 @@ func setupCommentNeedsWrite(
 	return stored.Status != string(status) || linkURL != ""
 }
 
-// syncSetupComment reconciles the comment telling a contributor what they
-// need to do. It does nothing outside a pull request. requiresMembership adds
-// the step of joining the check's Discord server. commentOnLinked posts a comment
-// confirming the link when a linked contributor has none yet.
+// syncSetupComment reconciles the comment telling a contributor what to do.
 func (s *Server) syncSetupComment(
 	ctx context.Context,
 	repositoryID int64,
@@ -139,7 +107,6 @@ func (s *Server) syncSetupComment(
 	issueNumber int64,
 	status commentStatus,
 	linkURL string,
-	requiresMembership bool,
 	commentOnLinked bool,
 ) error {
 	if issueNumber == 0 {
@@ -165,7 +132,7 @@ func (s *Server) syncSetupComment(
 		return fmt.Errorf("fetching issue author (%d): %w", issueNumber, err)
 	}
 
-	body := formatCommentBody(author.Login, status, linkURL, requiresMembership)
+	body := formatCommentBody(author.Login, status, linkURL)
 	comment := &storage.SetupComment{
 		RepositoryID: repositoryID,
 		IssueNumber:  issueNumber,

@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -22,7 +21,6 @@ const maxRequestBytes = 1 << 20
 
 type resolveRequest struct {
 	GitHubUserID      string `json:"github_user_id"`
-	GuildID           string `json:"guild_id"`
 	IssueNumber       int64  `json:"issue_number"`        // GitHub's API addresses PRs as issues.
 	SkipLinkedComment bool   `json:"skip_linked_comment"` // Whether to post a comment if the contributor is already linked.
 }
@@ -30,15 +28,18 @@ type resolveRequest struct {
 type resolveStatus string
 
 const (
-	statusLinked     resolveStatus = "linked"
-	statusUnlinked   resolveStatus = "unlinked"
-	statusRevoked    resolveStatus = "revoked"
+	statusLinked   resolveStatus = "linked"
+	statusUnlinked resolveStatus = "unlinked"
+	statusRevoked  resolveStatus = "revoked"
+
+	// statusNotAMember means the account is linked but not in the requested
+	// guild. Only /v1/discord/member serves it.
 	statusNotAMember resolveStatus = "not_a_member"
 )
 
 type resolveResponse struct {
 	Status  resolveStatus   `json:"status"`
-	Member  json.RawMessage `json:"member,omitempty"`
+	User    json.RawMessage `json:"user,omitempty"`
 	LinkURL string          `json:"link_url,omitempty"`
 
 	// AppInstallURL is set when the app is not installed on the repository, so
@@ -292,7 +293,10 @@ loop:
 	return fmt.Errorf("storing refreshed tokens: %w", err)
 }
 
-func (s *Server) resolveMember(
+// resolveUser reads the Discord user record behind a linked GitHub account. A
+// grant that no longer works is reported as revoked so the caller learns the
+// link has to be remade.
+func (s *Server) resolveUser(
 	ctx context.Context,
 	user *storage.DiscordUser,
 	lt linkToken,
@@ -306,24 +310,17 @@ func (s *Server) resolveMember(
 		return resolveResponse{}, err
 	}
 
-	member, err := s.discordClient.GuildMember(ctx, accessToken, lt.GuildID)
-	if err == nil {
-		return resolveResponse{Status: statusLinked, Member: member}, nil
+	me, err := s.discordClient.Me(ctx, accessToken)
+	if err != nil {
+		var apiErr *discord.APIError
+		if errors.As(err, &apiErr) && apiErr.Status == http.StatusUnauthorized {
+			return s.revokedResponse(lt)
+		}
+
+		return resolveResponse{}, fmt.Errorf("fetching discord user: %w", err)
 	}
 
-	var apiErr *discord.APIError
-	if !errors.As(err, &apiErr) {
-		return resolveResponse{}, fmt.Errorf("fetching guild member: %w", err)
-	}
-
-	switch apiErr.Status {
-	case http.StatusUnauthorized:
-		return s.revokedResponse(lt)
-	case http.StatusNotFound:
-		return resolveResponse{Status: statusNotAMember}, nil
-	default:
-		return resolveResponse{}, fmt.Errorf("fetching guild member: %w", err)
-	}
+	return resolveResponse{Status: statusLinked, User: me.Raw}, nil
 }
 
 // revokedResponse builds the response served when a Discord grant is unusable,
@@ -343,33 +340,13 @@ func (s *Server) revokedResponse(lt linkToken) (resolveResponse, error) {
 func (s *Server) handleResolve(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	token, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
-	if !ok || token == "" {
-		s.writeProblem(w, r, http.StatusUnauthorized, "missing bearer token")
-		return
-	}
-
-	claims, err := s.verifier.Verify(ctx, token)
-	if err != nil {
-		s.logger.Warn("rejecting oidc token", "error", err)
-		s.writeProblem(w, r, http.StatusUnauthorized, "invalid token")
-		return
-	}
-
-	body, err := io.ReadAll(io.LimitReader(r.Body, maxRequestBytes+1))
-	if err != nil {
-		s.writeProblem(w, r, http.StatusBadRequest, "reading request body")
-		return
-	}
-
-	if len(body) > maxRequestBytes {
-		s.writeProblem(w, r, http.StatusRequestEntityTooLarge, "request body too large")
+	claims, ok := s.verifyBearer(w, r)
+	if !ok {
 		return
 	}
 
 	var req resolveRequest
-	if err := json.Unmarshal(body, &req); err != nil {
-		s.writeProblem(w, r, http.StatusBadRequest, "invalid request body")
+	if !s.decodeBody(w, r, &req) {
 		return
 	}
 
@@ -389,7 +366,6 @@ func (s *Server) handleResolve(w http.ResponseWriter, r *http.Request) {
 		RepositoryID:      claims.RepositoryID,
 		Repository:        claims.Repository,
 		IssueNumber:       req.IssueNumber,
-		GuildID:           req.GuildID,
 		SkipLinkedComment: req.SkipLinkedComment,
 	}
 
@@ -413,12 +389,10 @@ func (s *Server) handleResolve(w http.ResponseWriter, r *http.Request) {
 		s.writeProblem(w, r, http.StatusInternalServerError, "internal error")
 
 		return
-	case req.GuildID == "":
-		resp = resolveResponse{Status: statusLinked}
 	default:
-		resp, err = s.resolveMember(ctx, user, lt)
+		resp, err = s.resolveUser(ctx, user, lt)
 		if err != nil {
-			s.logger.Error("resolving member", "error", err)
+			s.logger.Error("resolving discord user", "error", err)
 			s.writeProblem(w, r, http.StatusInternalServerError, "internal error")
 
 			return
@@ -430,9 +404,8 @@ func (s *Server) handleResolve(w http.ResponseWriter, r *http.Request) {
 		claims.RepositoryID,
 		claims.Repository,
 		req.IssueNumber,
-		commentStatusFor(resp.Status),
+		commentStatus(resp.Status),
 		resp.LinkURL,
-		req.GuildID != "",
 		!req.SkipLinkedComment,
 	); err != nil {
 		s.logSetupCommentError(err)

@@ -1,7 +1,6 @@
 package server
 
 import (
-	"context"
 	"crypto/rand"
 	"crypto/subtle"
 	"encoding/base64"
@@ -14,7 +13,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sonolink/arbiterer/internal/discord"
 	"github.com/sonolink/arbiterer/internal/storage"
 )
 
@@ -59,13 +57,12 @@ func linkExpiredf(part string) error {
 	return fmt.Errorf("link %s expired", part)
 }
 
-// linkToken is the sealed payload carried through the URL from /v1/resolve.
+// linkToken is the sealed payload carried through the URL from /v1/discord/resolve.
 type linkToken struct {
 	GitHubUserID      string    `json:"github_user_id"`
 	RepositoryID      int64     `json:"repository_id"`
 	Repository        string    `json:"repository"`
 	IssueNumber       int64     `json:"issue_number"`
-	GuildID           string    `json:"guild_id,omitempty"`
 	Nonce             string    `json:"nonce,omitempty"`
 	Expiry            time.Time `json:"expiry"`
 	SkipLinkedComment bool      `json:"skip_linked_comment,omitempty"`
@@ -78,7 +75,6 @@ type linkCookie struct {
 	GitHubUserID      string    `json:"github_user_id"`
 	Repository        string    `json:"repository"`
 	IssueNumber       int64     `json:"issue_number"`
-	GuildID           string    `json:"guild_id,omitempty"`
 	Expiry            time.Time `json:"expiry"`
 	SkipLinkedComment bool      `json:"skip_linked_comment,omitempty"`
 }
@@ -362,7 +358,6 @@ func (s *Server) handleLinkGitHubCallback(w http.ResponseWriter, r *http.Request
 		GitHubUserID:      lt.GitHubUserID,
 		Repository:        lt.Repository,
 		IssueNumber:       lt.IssueNumber,
-		GuildID:           lt.GuildID,
 		SkipLinkedComment: lt.SkipLinkedComment,
 	}
 
@@ -375,7 +370,6 @@ func (s *Server) handleLinkGitHubCallback(w http.ResponseWriter, r *http.Request
 		lc.IssueNumber,
 		commentGitHubVerified,
 		discordStepURL,
-		lc.GuildID != "",
 		!lc.SkipLinkedComment,
 	); err != nil {
 		s.logSetupCommentError(err)
@@ -535,35 +529,12 @@ func (s *Server) handleLinkDiscordCallback(w http.ResponseWriter, r *http.Reques
 		lc.RepositoryID,
 		lc.Repository,
 		lc.IssueNumber,
-		s.linkedCommentStatus(ctx, token.AccessToken, lc.GuildID),
+		commentLinked,
 		"",
-		lc.GuildID != "",
 		!lc.SkipLinkedComment,
 	); err != nil {
 		s.logSetupCommentError(err)
 	}
 
 	s.writeJSON(w, http.StatusOK, "Your GitHub and Discord accounts are now connected.")
-}
-
-// linkedCommentStatus returns the setup comment status of a contributor who
-// just linked their accounts, checking their membership of guildID when the
-// check requires one. A membership that cannot be confirmed is reported as
-// missing, so the step stays open until resolve confirms it.
-func (s *Server) linkedCommentStatus(ctx context.Context, accessToken, guildID string) commentStatus {
-	if guildID == "" {
-		return commentLinked
-	}
-
-	_, err := s.discordClient.GuildMember(ctx, accessToken, guildID)
-	if err == nil {
-		return commentLinked
-	}
-
-	var apiErr *discord.APIError
-	if !errors.As(err, &apiErr) || apiErr.Status != http.StatusNotFound {
-		s.logger.Warn("checking guild membership after linking", "error", err)
-	}
-
-	return commentNotAMember
 }
