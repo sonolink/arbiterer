@@ -28,7 +28,7 @@ function endpointFor(path) {
  *
  * @param {Object} options
  * @param {typeof import('@actions/core')} options.core
- * @param {string} options.path API path, e.g. "resolve".
+ * @param {string} options.path API path, e.g. "discord/resolve".
  * @param {Object} options.body
  * @returns {Promise<Object>} Parsed JSON response body.
  */
@@ -80,7 +80,7 @@ module.exports = async function post({ core, path, body }) {
   let detail;
   if (response.headers.get("content-type")?.includes("application/problem+json")) {
     const problem = await response.json().catch(() => null);
-    detail = problem?.detail ?? problem?.title;
+    detail = problem?.detail;
   }
 
   const message = `Server ${path} failed with HTTP ${response.status}.` + (detail ? ` Detail: ${detail}` : "");
