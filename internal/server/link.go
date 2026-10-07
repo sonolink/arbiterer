@@ -57,7 +57,7 @@ func linkExpiredf(part string) error {
 	return fmt.Errorf("link %s expired", part)
 }
 
-// linkToken is the sealed payload carried through the URL from /v1/resolve.
+// linkToken is the sealed payload carried through the URL from /v1/discord/resolve.
 type linkToken struct {
 	GitHubUserID      string    `json:"github_user_id"`
 	RepositoryID      int64     `json:"repository_id"`

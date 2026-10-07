@@ -36,7 +36,7 @@ module.exports = async function resolve({ core, context, github }) {
 
   const result = await post({
     core,
-    path: "resolve",
+    path: "discord/resolve",
     body: {
       github_user_id: String(userId),
       ...(issueNumber ? { issue_number: issueNumber } : {}),

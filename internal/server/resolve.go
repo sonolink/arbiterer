@@ -33,7 +33,7 @@ const (
 	statusRevoked  resolveStatus = "revoked"
 
 	// statusNotAMember means the account is linked but not in the requested
-	// guild. Only /v1/member serves it.
+	// guild. Only /v1/discord/member serves it.
 	statusNotAMember resolveStatus = "not_a_member"
 )
 

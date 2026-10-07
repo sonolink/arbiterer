@@ -22,7 +22,7 @@ type memberResponse struct {
 	LinkURL string          `json:"link_url,omitempty"`
 }
 
-// handleMember answers POST /v1/member, reading the guild member record of the
+// handleMember answers POST /v1/discord/member, reading the guild member record of the
 // Discord account linked to a GitHub user.
 func (s *Server) handleMember(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()

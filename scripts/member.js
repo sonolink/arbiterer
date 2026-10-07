@@ -23,7 +23,7 @@ module.exports = function createMemberHelper({ core, githubUserId }) {
     try {
       result = await post({
         core,
-        path: "member",
+        path: "discord/member",
         body: { github_user_id: githubUserId, guild_id: id },
       });
     } catch (error) {
