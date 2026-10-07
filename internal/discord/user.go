@@ -15,7 +15,7 @@ type User struct {
 
 // Me returns the data of the user behind the given access token.
 func (c *Client) Me(ctx context.Context, accessToken string) (*User, error) {
-	body, err := c.get(ctx, accessToken, "/users/@me")
+	body, err := c.get(ctx, accessToken, "/users/@me", "user")
 	if err != nil {
 		return nil, err
 	}
@@ -30,13 +30,13 @@ func (c *Client) Me(ctx context.Context, accessToken string) (*User, error) {
 
 // MeRaw returns the user behind the given access token as raw JSON.
 func (c *Client) MeRaw(ctx context.Context, accessToken string) (json.RawMessage, error) {
-	return c.getValid(ctx, accessToken, "/users/@me", "user")
+	return c.get(ctx, accessToken, "/users/@me", "user")
 }
 
-// GuildMember returns the raw member record as JSON. It stays raw so callers
-// can pick the fields they need without this package guessing the schema.
+// GuildMember returns the member record as JSON. It stays raw so callers can
+// pick the fields they need without this package guessing the schema.
 func (c *Client) GuildMember(ctx context.Context, accessToken, guildID string) (json.RawMessage, error) {
-	return c.getValid(
+	return c.get(
 		ctx,
 		accessToken,
 		"/users/@me/guilds/"+url.PathEscape(guildID)+"/member",
@@ -44,26 +44,13 @@ func (c *Client) GuildMember(ctx context.Context, accessToken, guildID string) (
 	)
 }
 
-// getValid reads a JSON endpoint, rejecting a body that will not decode.
-func (c *Client) getValid(
+// get reads a JSON endpoint, handling status codes and rejecting a body that will not decode.
+func (c *Client) get(
 	ctx context.Context,
 	accessToken,
 	path,
 	what string,
 ) (json.RawMessage, error) {
-	body, err := c.get(ctx, accessToken, path)
-	if err != nil {
-		return nil, err
-	}
-
-	if !json.Valid(body) {
-		return nil, fmt.Errorf("discord: %s response is not valid JSON (body: %.200q)", what, body)
-	}
-
-	return body, nil
-}
-
-func (c *Client) get(ctx context.Context, accessToken, path string) ([]byte, error) {
 	req, err := c.newRequest(ctx, http.MethodGet, path, nil)
 	if err != nil {
 		return nil, err
@@ -88,6 +75,10 @@ func (c *Client) get(ctx context.Context, accessToken, path string) ([]byte, err
 
 	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
 		return nil, parseAPIError(resp.StatusCode, body)
+	}
+
+	if !json.Valid(body) {
+		return nil, fmt.Errorf("discord: %s response is not valid JSON (body: %.200q)", what, body)
 	}
 
 	return body, nil
