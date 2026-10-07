@@ -2,7 +2,7 @@
 
 ![Arbiterer](assets/banner.png)
 
-A GitHub Action that lets your Discord community decide whose pull requests get through.
+A GitHub Action that lets your Discord community decide whose contributions get through.
 
 [![License](https://img.shields.io/github/license/sonolink/arbiterer)](LICENSE)
 [![Discord](https://img.shields.io/discord/1471146455002775624?label=discord)](https://discord.gg/tPHVWBPedt)
