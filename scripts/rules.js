@@ -34,16 +34,23 @@ module.exports = async function evaluateRules({ core, context, github, user, res
     throw new Error("The `rules` input is not valid JavaScript.", { cause: error });
   }
 
-  const failedBefore = process.exitCode;
+  let rulesFailed = false;
+  const ruleCore = {
+    ...core,
+    setFailed(message, options) {
+      rulesFailed = true;
+      return core.setFailed(message, options);
+    },
+  };
 
   try {
-    await evaluate(require, core, context, github, user, resolveMember);
+    await evaluate(require, ruleCore, context, github, user, resolveMember);
   } catch (error) {
     core.warning("The `rules` script crashed and the pull request was not closed. Fix the rules, then re-run the check.", { title: "Rules crashed" });
     throw new Error(`The \`rules\` script threw: ${error.message}`, { cause: error });
   }
 
-  if (closeOnFailure && !failedBefore && process.exitCode) {
+  if (closeOnFailure && rulesFailed) {
     await closePullRequest({ core, context, github });
   }
 };

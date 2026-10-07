@@ -91,6 +91,5 @@ async function reportMissingApp({ core, installUrl }) {
 
   await core.summary.addHeading(title, 3).addRaw(reason, true).addLink("Install the Arbiterer GitHub App", installUrl).write();
 
-  core.error(`${reason} A maintainer can install it here: ${installUrl}`, { title });
-  process.exitCode = 1;
+  core.setFailed(`${reason} A maintainer can install it here: ${installUrl}`, { title });
 }
