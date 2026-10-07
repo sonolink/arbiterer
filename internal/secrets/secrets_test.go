@@ -87,7 +87,7 @@ func TestOpenRejectsShortValues(t *testing.T) {
 	tests := map[string][]byte{
 		"empty":              {},
 		"shorter than nonce": {1, 2, 3},
-		"nonce without tag":  bytes.Repeat([]byte{0}, 12),
+		"nonce without tag":  make([]byte, 12),
 	}
 
 	for name, sealed := range tests {
