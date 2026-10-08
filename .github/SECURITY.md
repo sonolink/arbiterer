@@ -14,7 +14,8 @@ If you are using an outdated version of Arbiterer, we strongly recommend upgradi
 If you discover a potential security flaw in Arbiterer (e.g., sensitive data leakage, improper payload handling, or crashing vulnerabilities), please report it via one of the following methods:
 
 1.  **GitHub Security Advisory:** Navigate to the [Security tab](https://github.com/sonolink/arbiterer/security/advisories/new) of this repository and select "Report a vulnerability". This is the preferred method as it allows for a private discussion, collaborative fixing, and a formal CVE assignment if necessary.
-2.  **Private Contact:** You may contact the lead maintainer directly on our [Discord Server](https://discord.gg/tPHVWBPedt).
+2.  **Email:** Send the details of the vulnerability to [admin@arbiterer.com](mailto:admin@arbiterer.com).
+3.  **Private Contact:** You may contact the lead maintainer directly on our [Discord Server](https://discord.gg/tPHVWBPedt).
 
 ### Our Response Process
 
