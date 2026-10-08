@@ -1,14 +1,14 @@
-name: Lint & Build
+name: Lint and build
 
 on:
   workflow_dispatch:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
-    
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
-  
+
 jobs:
   format:
     name: Format (gofmt + goimports)
@@ -103,3 +103,25 @@ jobs:
 
       - name: Build (type-check all packages)
         run: go build ./...
+
+  migration-validation:
+    name: Validate migrations
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    if: format('{0}', github.event.pull_request.user.id) != vars.RENOVATE_BOT_ID
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: "go.mod"
+          cache: true
+
+      - name: goose validate
+        run: go tool goose validate -dir internal/storage/migrations
