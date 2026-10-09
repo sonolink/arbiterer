@@ -11,6 +11,8 @@ const (
 )
 
 // writeJSON sends v as a JSON response body.
+//
+//nolint:unparam // other codes are expected.
 func (s *Server) writeJSON(w http.ResponseWriter, status int, v any) {
 	s.write(w, status, contentTypeJSON, v)
 }
