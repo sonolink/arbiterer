@@ -70,7 +70,6 @@ module.exports = async function resolve({ core, context, github }) {
       await closePullRequest({
         core,
         context,
-        github,
         reason: "the author has not linked their Discord account",
       });
     }

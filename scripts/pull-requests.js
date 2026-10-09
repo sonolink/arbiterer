@@ -11,7 +11,7 @@ const closerLogin = process.env.ARBITERER_CLOSER_LOGIN?.trim() || "github-action
  * @param {string} options.reason Why the pull request is being closed.
  * @returns {Promise<void>}
  */
-async function closePullRequest({ core, context, github, reason }) {
+async function closePullRequest({ core, context, reason }) {
   const pullNumber = context.payload.pull_request?.number;
 
   if (!pullNumber) {

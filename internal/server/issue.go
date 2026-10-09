@@ -174,7 +174,8 @@ func (s *Server) logSetupCommentError(err error) {
 	s.logger.Error("syncing setup comment", "error", err)
 }
 
-func (s *Server) ClosePullRequest(w http.ResponseWriter, r *http.Request) {
+// HandleClosePullRequest handles a request to close a pull request.
+func (s *Server) HandleClosePullRequest(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	claims, ok := s.verifyBearer(w, r)
