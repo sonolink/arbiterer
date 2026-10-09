@@ -38,9 +38,10 @@ const (
 )
 
 type resolveResponse struct {
-	Status  resolveStatus   `json:"status"`
-	User    json.RawMessage `json:"user,omitempty"`
-	LinkURL string          `json:"link_url,omitempty"`
+	Status            resolveStatus   `json:"status"`
+	User              json.RawMessage `json:"user,omitempty"`
+	LinkURL           string          `json:"link_url,omitempty"`
+	ClosedByArbiterer bool            `json:"closed_by_arbiterer,omitempty"`
 
 	// AppInstallURL is set when the app is not installed on the repository, so
 	// it could not post the setup comment.
@@ -397,6 +398,16 @@ func (s *Server) handleResolve(w http.ResponseWriter, r *http.Request) {
 			s.writeProblem(w, r, http.StatusInternalServerError, "internal error")
 
 			return
+		}
+	}
+
+	if resp.Status == statusLinked {
+		closed, err := s.store.AutoClosedPullRequest(ctx, claims.RepositoryID, req.IssueNumber)
+		if err != nil && !errors.Is(err, storage.ErrNotFound) {
+			s.logger.Error("reading auto-closed record", "error", err, "issue_number", req.IssueNumber)
+			// Fail safe: an unknown state never reopens the pull request.
+		} else {
+			resp.ClosedByArbiterer = closed != nil
 		}
 	}
 

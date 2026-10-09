@@ -7,7 +7,7 @@ import (
 )
 
 // RerunWorkflow asks GitHub to re-run the given workflow run.
-func (c *Client) RerunWorkflow(ctx context.Context, token string, repo string, runID int64) error {
+func (c *Client) RerunWorkflow(ctx context.Context, token, repo string, runID int64) error {
 	if err := c.sendRequest(
 		ctx,
 		http.MethodPost,

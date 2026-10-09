@@ -4,8 +4,9 @@ description: >-
   `id-token: write` permission. Note: for pull requests from forks, the workflow must use `on: pull_request_target`.
 inputs:
   close-on-failure:
-    description: Close the pull request when the rules script fails it, or when the author has not linked
-      their accounts. Set to false to leave the pull request open with a failing check.
+    description: Close the pull request when the rules script fails it, or when the author has not linked their
+      accounts, and reopen it once the author has linked and the rules are satisfied. Set to false to leave the
+      pull request open with a failing check.
     required: false
     default: "false"
   comment-on-linked:

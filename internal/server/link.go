@@ -542,8 +542,8 @@ func (s *Server) handleLinkDiscordCallback(w http.ResponseWriter, r *http.Reques
 
 	s.rerunAfterLink(ctx, lc)
 
-	prUrl := fmt.Sprintf("https://github.com/%s/pull/%d", lc.Repository, lc.IssueNumber)
-	http.Redirect(w, r, prUrl, http.StatusSeeOther)
+	prURL := fmt.Sprintf("https://github.com/%s/pull/%d", lc.Repository, lc.IssueNumber)
+	http.Redirect(w, r, prURL, http.StatusSeeOther)
 }
 
 // rerunAfterLink re-runs the workflow run that posted the linking comment.

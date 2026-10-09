@@ -26,8 +26,17 @@ CREATE TABLE setup_comments (
   PRIMARY KEY (repository_id, issue_number)
 );
 
+CREATE TABLE auto_closed_pull_requests (
+  repository_id BIGINT NOT NULL,
+  issue_number BIGINT NOT NULL,
+  run_id BIGINT NOT NULL,
+  closed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (repository_id, issue_number)
+);
+
 -- +goose Down
 DROP TABLE IF EXISTS github_discord_connections CASCADE;
 DROP TABLE IF EXISTS discord_users CASCADE;
 DROP TABLE IF EXISTS setup_comments CASCADE;
+DROP TABLE IF EXISTS auto_closed_pull_requests CASCADE;
 DROP TYPE IF EXISTS setup_comment_status;

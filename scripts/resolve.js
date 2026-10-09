@@ -1,6 +1,6 @@
 const evaluateRules = require("./rules");
 const createMemberHelper = require("./member");
-const closePullRequest = require("./pull");
+const { closePullRequest } = require("./pull-requests");
 const post = require("./api");
 const commentOnLinked = process.env.ARBITERER_COMMENT_ON_LINKED?.trim().toLowerCase() !== "false";
 const closeOnFailure = process.env.ARBITERER_CLOSE_ON_FAILURE?.trim().toLowerCase() !== "false";
@@ -87,15 +87,14 @@ module.exports = async function resolve({ core, context, github }) {
     context,
     github,
     user: result.user,
+    autoClosed: result.closed_by_arbiterer === true,
     resolveMember: createMemberHelper({ core, githubUserId: String(userId) }),
   });
 };
 
 function linkRequiredMessage(status) {
   const reason =
-    status === "revoked"
-      ? "The pull request author's Discord link has expired or was revoked."
-      : "The pull request author has not linked their GitHub and Discord accounts yet.";
+    status === "revoked" ? "The pull request author's Discord link has expired or was revoked." : "The pull request author has not linked their GitHub and Discord accounts yet.";
 
   return `${reason} This check re-runs automatically once they link.`;
 }
