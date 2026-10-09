@@ -536,5 +536,6 @@ func (s *Server) handleLinkDiscordCallback(w http.ResponseWriter, r *http.Reques
 		s.logSetupCommentError(err)
 	}
 
-	s.writeJSON(w, http.StatusOK, "Your GitHub and Discord accounts are now connected.")
+	prUrl := fmt.Sprintf("https://github.com/%s/pull/%d", lc.Repository, lc.IssueNumber)
+	http.Redirect(w, r, prUrl, http.StatusSeeOther)
 }
