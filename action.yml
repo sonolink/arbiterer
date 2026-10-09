@@ -7,7 +7,7 @@ inputs:
     description: Close the pull request when the rules script fails it. Set to false to leave the pull
       request open with a failing check.
     required: false
-    default: "true"
+    default: "false"
   comment-on-linked:
     description: Post a comment on the pull request confirming that the author is already linked. Set to false to only
       comment when the author still has to act. A comment that earlier asked them to act is always updated.
