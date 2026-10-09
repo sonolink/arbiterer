@@ -1,3 +1,4 @@
+const closePullRequest = require("./pull");
 const rulesSource = process.env.ARBITERER_RULES?.trim() || "";
 const rulesMaxBytes = 40 * 1024; // 40 KiB (GitHub caps a single env var at 48 KiB).
 if (rulesSource && Buffer.byteLength(rulesSource, "utf8") > rulesMaxBytes) {
@@ -51,38 +52,6 @@ module.exports = async function evaluateRules({ core, context, github, user, res
   }
 
   if (closeOnFailure && rulesFailed) {
-    await closePullRequest({ core, context, github });
+    await closePullRequest({ core, context, github, reason: "rules were not satisfied" });
   }
 };
-
-/**
- * Closes the pull request. Failing to close is cleanup, not the check itself,
- * so it must not mask the rules failure that already set the exit code.
- * @param {Object} options
- * @param {typeof import('@actions/core')} options.core
- * @param {typeof import('@actions/github').context} options.context
- * @param {typeof import('@actions/github')} options.github
- * @returns {Promise<void>}
- */
-async function closePullRequest({ core, context, github }) {
-  const pullNumber = context.payload.pull_request?.number;
-
-  if (!pullNumber) {
-    core.info("Not closing: no pull request number in the event payload.");
-    return;
-  }
-
-  try {
-    await github.rest.pulls.update({
-      owner: context.repo.owner,
-      repo: context.repo.repo,
-      pull_number: pullNumber,
-      state: "closed",
-    });
-  } catch (error) {
-    core.warning(`Could not close pull request #${pullNumber}: ${error.message}`, { title: "Close failed" });
-    return;
-  }
-
-  core.info(`Closed pull request #${pullNumber} because its rules were not satisfied.`);
-}

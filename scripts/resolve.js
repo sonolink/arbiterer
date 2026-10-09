@@ -1,7 +1,9 @@
 const evaluateRules = require("./rules");
 const createMemberHelper = require("./member");
+const closePullRequest = require("./pull");
 const post = require("./api");
 const commentOnLinked = process.env.ARBITERER_COMMENT_ON_LINKED?.trim().toLowerCase() !== "false";
+const closeOnFailure = process.env.ARBITERER_CLOSE_ON_FAILURE?.trim().toLowerCase() !== "false";
 const rulesSource = process.env.ARBITERER_RULES?.trim() || "";
 
 /**
@@ -54,12 +56,25 @@ module.exports = async function resolve({ core, context, github }) {
 
   if (result.app_install_url) {
     await reportMissingApp({ core, installUrl: result.app_install_url });
+    return;
   }
 
   if (result.status !== "linked") {
     if (rulesSource) {
       core.info("Skipping rules: the pull request author has no Discord account linked yet.");
     }
+
+    core.setFailed(linkRequiredMessage(result.status));
+
+    if (closeOnFailure) {
+      await closePullRequest({
+        core,
+        context,
+        github,
+        reason: "the author has not linked their Discord account",
+      });
+    }
+
     return;
   }
 
@@ -75,6 +90,15 @@ module.exports = async function resolve({ core, context, github }) {
     resolveMember: createMemberHelper({ core, githubUserId: String(userId) }),
   });
 };
+
+function linkRequiredMessage(status) {
+  const reason =
+    status === "revoked"
+      ? "The pull request author's Discord link has expired or was revoked."
+      : "The pull request author has not linked their GitHub and Discord accounts yet.";
+
+  return `${reason} This check re-runs automatically once they link.`;
+}
 
 /**
  * Fails the step when the GitHub App is missing, reporting it in the job

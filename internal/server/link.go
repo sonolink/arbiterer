@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/subtle"
 	"encoding/base64"
@@ -63,6 +64,7 @@ type linkToken struct {
 	RepositoryID      int64     `json:"repository_id"`
 	Repository        string    `json:"repository"`
 	IssueNumber       int64     `json:"issue_number"`
+	RunID             int64     `json:"run_id,omitempty"`
 	Nonce             string    `json:"nonce,omitempty"`
 	Expiry            time.Time `json:"expiry"`
 	SkipLinkedComment bool      `json:"skip_linked_comment,omitempty"`
@@ -75,6 +77,7 @@ type linkCookie struct {
 	GitHubUserID      string    `json:"github_user_id"`
 	Repository        string    `json:"repository"`
 	IssueNumber       int64     `json:"issue_number"`
+	RunID             int64     `json:"run_id,omitempty"`
 	Expiry            time.Time `json:"expiry"`
 	SkipLinkedComment bool      `json:"skip_linked_comment,omitempty"`
 }
@@ -358,6 +361,7 @@ func (s *Server) handleLinkGitHubCallback(w http.ResponseWriter, r *http.Request
 		GitHubUserID:      lt.GitHubUserID,
 		Repository:        lt.Repository,
 		IssueNumber:       lt.IssueNumber,
+		RunID:             lt.RunID,
 		SkipLinkedComment: lt.SkipLinkedComment,
 	}
 
@@ -536,6 +540,44 @@ func (s *Server) handleLinkDiscordCallback(w http.ResponseWriter, r *http.Reques
 		s.logSetupCommentError(err)
 	}
 
+	s.rerunAfterLink(ctx, lc)
+
 	prUrl := fmt.Sprintf("https://github.com/%s/pull/%d", lc.Repository, lc.IssueNumber)
 	http.Redirect(w, r, prUrl, http.StatusSeeOther)
+}
+
+// rerunAfterLink re-runs the workflow run that posted the linking comment.
+func (s *Server) rerunAfterLink(ctx context.Context, lc linkCookie) {
+	if lc.RunID == 0 || lc.Repository == "" {
+		return
+	}
+
+	token, err := s.githubClient.CreateInstallationToken(ctx, lc.RepositoryID, lc.Repository)
+	if err != nil {
+		s.logger.Warn(
+			"skipping workflow rerun: cannot create installation token",
+			"error", err,
+			"repository", lc.Repository,
+			"run_id", lc.RunID,
+		)
+
+		return
+	}
+
+	if err := s.githubClient.RerunWorkflow(ctx, token, lc.Repository, lc.RunID); err != nil {
+		s.logger.Warn(
+			"skipping workflow rerun: GitHub rejected the request",
+			"error", err,
+			"repository", lc.Repository,
+			"run_id", lc.RunID,
+		)
+
+		return
+	}
+
+	s.logger.Info(
+		"rerunning workflow after account link",
+		"repository", lc.Repository,
+		"run_id", lc.RunID,
+	)
 }

@@ -66,6 +66,7 @@ func (s *Server) handleMember(w http.ResponseWriter, r *http.Request) {
 		GitHubUserID: req.GitHubUserID,
 		RepositoryID: claims.RepositoryID,
 		Repository:   claims.Repository,
+		RunID:        claims.RunID,
 	})
 }
 
