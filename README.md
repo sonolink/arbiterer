@@ -81,20 +81,20 @@ For example, to require MFA, guild membership, and a week of tenure:
       const weekMs = 7 * 24 * 60 * 60 * 1000;
 
       if (!user.mfa_enabled) {
-        core.setFailed("You don't have two-factor auth enabled on your Discord account.");
+        core.setFailed("User doesn't have two-factor auth enabled on their Discord account.");
         return;
       }
 
       const member = await resolveMember(GUILD);
 
       if (!member) {
-        core.setFailed("You are not a member of https://discord.gg/tPHVWBPedt");
+        core.setFailed("User is not a member of https://discord.gg/tPHVWBPedt");
         return;
       }
 
       const joined = member.joined_at ? Date.parse(member.joined_at) : 0;
       if (!joined || Date.now() - joined <= weekMs) {
-        core.setFailed(`Wait a week after joining. You joined ${member.joined_at ?? "recently"}.`);
+        core.setFailed(`User joined ${member.joined_at ?? "recently"}. Please wait 7 days after joining.`);
       }
 ```
 
