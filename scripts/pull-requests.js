@@ -19,20 +19,16 @@ async function closePullRequest({ core, context, github, reason }) {
     return;
   }
 
+  let res;
   try {
-    await github.rest.pulls.update({
-      owner: context.repo.owner,
-      repo: context.repo.repo,
-      pull_number: pullNumber,
-      state: "closed",
-    });
+    res = await post({ core, path: "pulls/close", body: { issue_number: pullNumber } });
   } catch (error) {
     core.warning(`Could not close pull request #${pullNumber}: ${error.message}`, { title: "Close failed" });
     return;
   }
 
   core.info(`Closed pull request #${pullNumber} because ${reason}.`);
-  await recordClosed({ core, pullNumber, closed: true });
+  await recordClosed({ core, pullNumber, closed: res?.closed ?? true });
 }
 
 /**

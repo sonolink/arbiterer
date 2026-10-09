@@ -173,3 +173,38 @@ func (s *Server) logSetupCommentError(err error) {
 
 	s.logger.Error("syncing setup comment", "error", err)
 }
+
+func (s *Server) ClosePullRequest(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	claims, ok := s.verifyBearer(w, r)
+	if !ok {
+		return
+	}
+
+	var req closedRequest
+	if !s.decodeBody(w, r, &req) {
+		return
+	}
+
+	if req.IssueNumber == 0 {
+		s.writeProblem(w, r, http.StatusBadRequest, "issue_number is required")
+		return
+	}
+
+	token, err := s.githubClient.CreateInstallationToken(ctx, claims.RepositoryID, claims.Repository)
+	if err != nil {
+		s.logger.Error("creating installation token", "error", err)
+		s.writeProblem(w, r, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	err = s.githubClient.ClosePullRequest(ctx, token, claims.Repository, req.IssueNumber)
+	if err != nil {
+		s.logger.Error("closing pull request", "error", err)
+		s.writeProblem(w, r, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	s.writeJSON(w, http.StatusOK, map[string]bool{"closed": true})
+}

@@ -74,3 +74,18 @@ func (c *Client) UpdateComment(ctx context.Context, token, repo string, commentI
 
 	return nil
 }
+
+func (c *Client) ClosePullRequest(ctx context.Context, token, repo string, issueNumber int64) error {
+	if err := c.sendRequest(
+		ctx,
+		http.MethodPatch,
+		fmt.Sprintf("/repos/%s/pulls/%d", repo, issueNumber),
+		token,
+		map[string]string{"state": "closed"},
+		nil,
+	); err != nil {
+		return fmt.Errorf("github: closing pull request: %w", err)
+	}
+
+	return nil
+}
