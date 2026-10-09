@@ -54,12 +54,21 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: sonolink/arbiterer@v1
-        with:
-          rules: |
-            // Optional. Plain JavaScript, see "Rules" below.
 ```
 
-Drop the `with` block entirely if authors only need to link their accounts.
+That's all you need if authors only have to link their accounts. To enforce conditions on the linked Discord account, add [rules](#rules).
+
+## Configuration
+
+### Inputs
+
+All inputs are optional.
+
+| Input               | Description                                                                                                                                                                                              | Default |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- |
+| `rules`             | JavaScript that decides whether the author passes. See [Rules](#rules). Leave empty to only require a linked Discord account.                                                                            | `""`    |
+| `close-on-failure`  | Close the pull request when the rules script fails it. Set to `false` to leave the pull request open with a failing check.                                                                               | `false` |
+| `comment-on-linked` | Post a comment on the pull request confirming the author is already linked. Set to `false` to only comment when the author still has to act. A comment that earlier asked them to act is always updated. | `true`  |
 
 ### Rules
 
@@ -74,7 +83,7 @@ The `rules` input is a JavaScript snippet run once per pull request. It has acce
 For example, to require MFA, guild membership, and a week of tenure:
 
 ```yaml
-- uses: sonolink/arbiterer@v1.0.0
+- uses: sonolink/arbiterer@v1
   with:
     rules: |
       const GUILD = "1471146455002775624";
