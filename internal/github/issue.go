@@ -75,16 +75,26 @@ func (c *Client) UpdateComment(ctx context.Context, token, repo string, commentI
 	return nil
 }
 
+// ClosePullRequest closes the given pull request.
 func (c *Client) ClosePullRequest(ctx context.Context, token, repo string, issueNumber int64) error {
+	return c.setPullRequestState(ctx, token, repo, issueNumber, "closed")
+}
+
+// OpenPullRequest reopens the given pull request.
+func (c *Client) OpenPullRequest(ctx context.Context, token, repo string, issueNumber int64) error {
+	return c.setPullRequestState(ctx, token, repo, issueNumber, "open")
+}
+
+func (c *Client) setPullRequestState(ctx context.Context, token, repo string, issueNumber int64, state string) error {
 	if err := c.sendRequest(
 		ctx,
 		http.MethodPatch,
 		fmt.Sprintf("/repos/%s/pulls/%d", repo, issueNumber),
 		token,
-		map[string]string{"state": "closed"},
+		map[string]string{"state": state},
 		nil,
 	); err != nil {
-		return fmt.Errorf("github: closing pull request: %w", err)
+		return fmt.Errorf("github: setting pull request state to %s: %w", state, err)
 	}
 
 	return nil

@@ -367,7 +367,6 @@ func (s *Server) handleResolve(w http.ResponseWriter, r *http.Request) {
 		RepositoryID:      claims.RepositoryID,
 		Repository:        claims.Repository,
 		IssueNumber:       req.IssueNumber,
-		RunID:             claims.RunID,
 		SkipLinkedComment: req.SkipLinkedComment,
 	}
 

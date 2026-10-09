@@ -64,7 +64,6 @@ type linkToken struct {
 	RepositoryID      int64     `json:"repository_id"`
 	Repository        string    `json:"repository"`
 	IssueNumber       int64     `json:"issue_number"`
-	RunID             int64     `json:"run_id,omitempty"`
 	Nonce             string    `json:"nonce,omitempty"`
 	Expiry            time.Time `json:"expiry"`
 	SkipLinkedComment bool      `json:"skip_linked_comment,omitempty"`
@@ -77,7 +76,6 @@ type linkCookie struct {
 	GitHubUserID      string    `json:"github_user_id"`
 	Repository        string    `json:"repository"`
 	IssueNumber       int64     `json:"issue_number"`
-	RunID             int64     `json:"run_id,omitempty"`
 	Expiry            time.Time `json:"expiry"`
 	SkipLinkedComment bool      `json:"skip_linked_comment,omitempty"`
 }
@@ -361,7 +359,6 @@ func (s *Server) handleLinkGitHubCallback(w http.ResponseWriter, r *http.Request
 		GitHubUserID:      lt.GitHubUserID,
 		Repository:        lt.Repository,
 		IssueNumber:       lt.IssueNumber,
-		RunID:             lt.RunID,
 		SkipLinkedComment: lt.SkipLinkedComment,
 	}
 
@@ -540,44 +537,57 @@ func (s *Server) handleLinkDiscordCallback(w http.ResponseWriter, r *http.Reques
 		s.logSetupCommentError(err)
 	}
 
-	s.rerunAfterLink(ctx, lc)
+	s.openAfterLink(ctx, lc)
 
 	prURL := fmt.Sprintf("https://github.com/%s/pull/%d", lc.Repository, lc.IssueNumber)
 	http.Redirect(w, r, prURL, http.StatusSeeOther)
 }
 
-// rerunAfterLink re-runs the workflow run that posted the linking comment.
-func (s *Server) rerunAfterLink(ctx context.Context, lc linkCookie) {
-	if lc.RunID == 0 || lc.Repository == "" {
+// openAfterLink opens the pull request when the action closed it before the  author linked.
+func (s *Server) openAfterLink(ctx context.Context, lc linkCookie) {
+	if lc.Repository == "" || lc.IssueNumber == 0 {
+		return
+	}
+
+	if _, err := s.store.AutoClosedPullRequest(ctx, lc.RepositoryID, lc.IssueNumber); err != nil {
+		if !errors.Is(err, storage.ErrNotFound) {
+			s.logger.Error(
+				"reading auto-closed record before opening",
+				"error", err,
+				"repository", lc.Repository,
+				"issue_number", lc.IssueNumber,
+			)
+		}
+
 		return
 	}
 
 	token, err := s.githubClient.CreateInstallationToken(ctx, lc.RepositoryID, lc.Repository)
 	if err != nil {
 		s.logger.Warn(
-			"skipping workflow rerun: cannot create installation token",
+			"skipping pull request open: cannot create installation token",
 			"error", err,
 			"repository", lc.Repository,
-			"run_id", lc.RunID,
+			"issue_number", lc.IssueNumber,
 		)
 
 		return
 	}
 
-	if err := s.githubClient.RerunWorkflow(ctx, token, lc.Repository, lc.RunID); err != nil {
+	if err := s.githubClient.OpenPullRequest(ctx, token, lc.Repository, lc.IssueNumber); err != nil {
 		s.logger.Warn(
-			"skipping workflow rerun: GitHub rejected the request",
+			"skipping pull request open: GitHub rejected the request",
 			"error", err,
 			"repository", lc.Repository,
-			"run_id", lc.RunID,
+			"issue_number", lc.IssueNumber,
 		)
 
 		return
 	}
 
 	s.logger.Info(
-		"rerunning workflow after account link",
+		"opened pull request after account link",
 		"repository", lc.Repository,
-		"run_id", lc.RunID,
+		"issue_number", lc.IssueNumber,
 	)
 }
