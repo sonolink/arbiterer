@@ -314,6 +314,15 @@ func workflowRunURL(claims *github.Claims) string {
 		return ""
 	}
 
+	if claims.CheckRunID != 0 {
+		return fmt.Sprintf(
+			"https://github.com/%s/actions/runs/%d/job/%d",
+			claims.Repository,
+			claims.RunID,
+			claims.CheckRunID,
+		)
+	}
+
 	return fmt.Sprintf("https://github.com/%s/actions/runs/%d", claims.Repository, claims.RunID)
 }
 
