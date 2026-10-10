@@ -105,7 +105,7 @@ func (s *Store) TakeSetupCommentRerunJob(ctx context.Context, repositoryID, issu
 		SET rerun_job_id = NULL,
 			updated_at = NOW()
 		WHERE repository_id = $1 AND issue_number = $2 AND rerun_job_id IS NOT NULL
-		RETURNING rerun_job_id`
+		RETURNING old.rerun_job_id`
 
 	var jobID int64
 	err := s.pool.QueryRow(ctx, query, repositoryID, issueNumber).Scan(&jobID)
