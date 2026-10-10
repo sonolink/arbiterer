@@ -404,7 +404,6 @@ func (s *Server) handleResolve(w http.ResponseWriter, r *http.Request) {
 		closed, err := s.store.AutoClosedPullRequest(ctx, claims.RepositoryID, req.IssueNumber)
 		if err != nil && !errors.Is(err, storage.ErrNotFound) {
 			s.logger.Error("reading auto-closed record", "error", err, "issue_number", req.IssueNumber)
-			// Fail safe: an unknown state never reopens the pull request.
 		} else {
 			resp.ClosedByArbiterer = closed != nil
 		}

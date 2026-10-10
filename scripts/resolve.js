@@ -64,7 +64,7 @@ module.exports = async function resolve({ core, context, github }) {
       core.info("Skipping rules: the pull request author has no Discord account linked yet.");
     }
 
-    core.setFailed(linkRequiredMessage(result.status));
+    core.setFailed(linkRequiredMessage(result.status, closeOnFailure));
 
     if (closeOnFailure) {
       await closePullRequest({
@@ -91,11 +91,15 @@ module.exports = async function resolve({ core, context, github }) {
   });
 };
 
-function linkRequiredMessage(status) {
+function linkRequiredMessage(status, closeOnFailure) {
   const reason =
     status === "revoked" ? "The pull request author's Discord link has expired or was revoked." : "The pull request author has not linked their GitHub and Discord accounts yet.";
 
-  return `${reason} This check re-runs automatically once they link.`;
+  if (closeOnFailure) {
+    return `${reason} This check re-runs automatically once they link.`;
+  }
+
+  return `${reason} Re-run this check once they link.`;
 }
 
 /**

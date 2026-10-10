@@ -543,44 +543,33 @@ func (s *Server) handleLinkDiscordCallback(w http.ResponseWriter, r *http.Reques
 	http.Redirect(w, r, prURL, http.StatusSeeOther)
 }
 
-// openAfterLink opens the pull request when the action closed it before the  author linked.
+// openAfterLink opens the pull request when the app auto-closed it before the author linked.
 func (s *Server) openAfterLink(ctx context.Context, lc linkCookie) {
 	if lc.Repository == "" || lc.IssueNumber == 0 {
 		return
 	}
 
-	if _, err := s.store.AutoClosedPullRequest(ctx, lc.RepositoryID, lc.IssueNumber); err != nil {
-		if !errors.Is(err, storage.ErrNotFound) {
-			s.logger.Error(
-				"reading auto-closed record before opening",
-				"error", err,
+	resp, err := s.openIfAutoClosed(ctx, lc.RepositoryID, lc.Repository, lc.IssueNumber)
+	if err != nil {
+		s.logger.Error(
+			"opening auto-closed pull request after account link",
+			"error", err,
+			"repository", lc.Repository,
+			"issue_number", lc.IssueNumber,
+		)
+
+		return
+	}
+
+	if !resp.Opened {
+		if resp.Reason != "" && resp.Reason != reasonNotClosedByApp {
+			s.logger.Debug(
+				"keeping pull request closed after account link",
+				"reason", resp.Reason,
 				"repository", lc.Repository,
 				"issue_number", lc.IssueNumber,
 			)
 		}
-
-		return
-	}
-
-	token, err := s.githubClient.CreateInstallationToken(ctx, lc.RepositoryID, lc.Repository)
-	if err != nil {
-		s.logger.Warn(
-			"skipping pull request open: cannot create installation token",
-			"error", err,
-			"repository", lc.Repository,
-			"issue_number", lc.IssueNumber,
-		)
-
-		return
-	}
-
-	if err := s.githubClient.OpenPullRequest(ctx, token, lc.Repository, lc.IssueNumber); err != nil {
-		s.logger.Warn(
-			"skipping pull request open: GitHub rejected the request",
-			"error", err,
-			"repository", lc.Repository,
-			"issue_number", lc.IssueNumber,
-		)
 
 		return
 	}

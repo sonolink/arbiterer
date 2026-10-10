@@ -1,4 +1,4 @@
-const { closePullRequest, reopenPullRequest } = require("./pull-requests");
+const { closePullRequest, openPullRequest } = require("./pull-requests");
 const rulesSource = process.env.ARBITERER_RULES?.trim() || "";
 const rulesMaxBytes = 40 * 1024; // 40 KiB (GitHub caps a single env var at 48 KiB).
 if (rulesSource && Buffer.byteLength(rulesSource, "utf8") > rulesMaxBytes) {
@@ -23,7 +23,7 @@ const closeOnFailure = process.env.ARBITERER_CLOSE_ON_FAILURE?.trim().toLowerCas
  * @param {Object} options.user Raw Discord user object for a linked account.
  * @param {(guildId: string) => Promise<Object | null>} options.resolveMember
  * @param {boolean} [options.autoClosed] True when a previous run closed the
- *   pull request and has not reopened it, so a passing run should reopen it.
+ *   pull request and has not opened it, so a passing run should open it.
  * @returns {Promise<void>}
  */
 module.exports = async function evaluateRules({ core, context, github, user, autoClosed = false, resolveMember }) {
@@ -55,9 +55,9 @@ module.exports = async function evaluateRules({ core, context, github, user, aut
 
   if (closeOnFailure) {
     if (rulesFailed) {
-      await closePullRequest({ core, context, github, reason: "rules were not satisfied" });
+      await closePullRequest({ core, context, reason: "rules were not satisfied" });
     } else if (autoClosed) {
-      await reopenPullRequest({ core, context, github });
+      await openPullRequest({ core, context });
     }
   }
 };

@@ -29,8 +29,7 @@ CREATE TABLE setup_comments (
 CREATE TABLE auto_closed_pull_requests (
   repository_id BIGINT NOT NULL,
   issue_number BIGINT NOT NULL,
-  run_id BIGINT NOT NULL,
-  closed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  closed_at TIMESTAMPTZ NOT NULL,
   PRIMARY KEY (repository_id, issue_number)
 );
 

@@ -5,7 +5,7 @@ description: >-
 inputs:
   close-on-failure:
     description: Close the pull request when the rules script fails it, or when the author has not linked their
-      accounts, and reopen it once the author has linked and the rules are satisfied. Set to false to leave the
+      accounts, and open it once the author has linked and the rules are satisfied. Set to false to leave the
       pull request open with a failing check.
     required: false
     default: "false"

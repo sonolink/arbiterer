@@ -4,7 +4,32 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"time"
 )
+
+// PullRequest is the pull request state the close and open flows need.
+type PullRequest struct {
+	State    string    `json:"state"`
+	Merged   bool      `json:"merged"`
+	ClosedAt time.Time `json:"closed_at"`
+}
+
+// FetchPullRequest returns the pull request's current state.
+func (c *Client) FetchPullRequest(ctx context.Context, token, repo string, issueNumber int64) (*PullRequest, error) {
+	var pr PullRequest
+	if err := c.sendRequest(
+		ctx,
+		http.MethodGet,
+		fmt.Sprintf("/repos/%s/pulls/%d", repo, issueNumber),
+		token,
+		nil,
+		&pr,
+	); err != nil {
+		return nil, fmt.Errorf("github: fetching pull request: %w", err)
+	}
+
+	return &pr, nil
+}
 
 // FetchIssueAuthor returns the user who opened the given issue (pull request).
 func (c *Client) FetchIssueAuthor(
@@ -75,27 +100,31 @@ func (c *Client) UpdateComment(ctx context.Context, token, repo string, commentI
 	return nil
 }
 
-// ClosePullRequest closes the given pull request.
-func (c *Client) ClosePullRequest(ctx context.Context, token, repo string, issueNumber int64) error {
+// ClosePullRequest closes the given pull request and returns it with GitHub's
+// ClosedAt.
+func (c *Client) ClosePullRequest(ctx context.Context, token, repo string, issueNumber int64) (*PullRequest, error) {
 	return c.setPullRequestState(ctx, token, repo, issueNumber, "closed")
 }
 
-// OpenPullRequest reopens the given pull request.
+// OpenPullRequest opens the given pull request.
 func (c *Client) OpenPullRequest(ctx context.Context, token, repo string, issueNumber int64) error {
-	return c.setPullRequestState(ctx, token, repo, issueNumber, "open")
+	_, err := c.setPullRequestState(ctx, token, repo, issueNumber, "open")
+
+	return err
 }
 
-func (c *Client) setPullRequestState(ctx context.Context, token, repo string, issueNumber int64, state string) error {
+func (c *Client) setPullRequestState(ctx context.Context, token, repo string, issueNumber int64, state string) (*PullRequest, error) {
+	var pr PullRequest
 	if err := c.sendRequest(
 		ctx,
 		http.MethodPatch,
 		fmt.Sprintf("/repos/%s/pulls/%d", repo, issueNumber),
 		token,
 		map[string]string{"state": state},
-		nil,
+		&pr,
 	); err != nil {
-		return fmt.Errorf("github: setting pull request state to %s: %w", state, err)
+		return nil, fmt.Errorf("github: setting pull request state to %s: %w", state, err)
 	}
 
-	return nil
+	return &pr, nil
 }

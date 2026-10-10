@@ -39,7 +39,6 @@ type Claims struct {
 	RepositoryID      int64
 	RepositoryOwnerID int64
 	Repository        string
-	RunID             int64
 }
 
 // tokenClaims mirrors the claims GitHub Actions puts in an OIDC token. Numeric ids
@@ -48,7 +47,6 @@ type tokenClaims struct {
 	RepositoryID      string `json:"repository_id"`
 	RepositoryOwnerID string `json:"repository_owner_id"`
 	Repository        string `json:"repository"`
-	RunID             string `json:"run_id"`
 }
 
 func (tc tokenClaims) claims() (*Claims, error) {
@@ -66,16 +64,10 @@ func (tc tokenClaims) claims() (*Claims, error) {
 		return nil, fmt.Errorf("github: token missing repository claim")
 	}
 
-	runID, err := strconv.ParseInt(tc.RunID, 10, 64)
-	if err != nil && tc.RunID != "" {
-		return nil, fmt.Errorf("github: parsing run id %q: %w", tc.RunID, err)
-	}
-
 	return &Claims{
 		RepositoryID:      repositoryID,
 		RepositoryOwnerID: ownerID,
 		Repository:        tc.Repository,
-		RunID:             runID,
 	}, nil
 }
 

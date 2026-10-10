@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/sonolink/arbiterer/internal/github"
 	"github.com/sonolink/arbiterer/internal/storage"
@@ -174,8 +175,17 @@ func (s *Server) logSetupCommentError(err error) {
 	s.logger.Error("syncing setup comment", "error", err)
 }
 
-// HandleClosePullRequest handles a request to close a pull request.
-func (s *Server) HandleClosePullRequest(w http.ResponseWriter, r *http.Request) {
+type closeRequest struct {
+	IssueNumber int64 `json:"issue_number"` // GitHub's API addresses PRs as issues.
+}
+
+type closeResponse struct {
+	Closed   bool `json:"closed"`
+	Recorded bool `json:"recorded"`
+}
+
+// handleClosePullRequest  answers POST /v1/pulls/close.
+func (s *Server) handleClosePullRequest(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	claims, ok := s.verifyBearer(w, r)
@@ -183,7 +193,7 @@ func (s *Server) HandleClosePullRequest(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	var req closedRequest
+	var req closeRequest
 	if !s.decodeBody(w, r, &req) {
 		return
 	}
@@ -200,12 +210,139 @@ func (s *Server) HandleClosePullRequest(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	err = s.githubClient.ClosePullRequest(ctx, token, claims.Repository, req.IssueNumber)
+	pr, err := s.githubClient.FetchPullRequest(ctx, token, claims.Repository, req.IssueNumber)
+	if err != nil {
+		s.logger.Error("fetching pull request", "error", err)
+		s.writeProblem(w, r, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	if pr.State != "open" {
+		// Already closed or merged: not the app's close to record or undo.
+		s.writeJSON(w, http.StatusOK, closeResponse{})
+
+		return
+	}
+
+	pr, err = s.githubClient.ClosePullRequest(ctx, token, claims.Repository, req.IssueNumber)
 	if err != nil {
 		s.logger.Error("closing pull request", "error", err)
 		s.writeProblem(w, r, http.StatusInternalServerError, "internal error")
 		return
 	}
 
-	s.writeJSON(w, http.StatusOK, map[string]bool{"closed": true})
+	recorded := true
+	if err := s.store.UpsertAutoClosedPullRequest(ctx, claims.RepositoryID, req.IssueNumber, pr.ClosedAt); err != nil {
+		recorded = false
+		s.logger.Error(
+			"recording auto-closed pull request",
+			"error", err,
+			"issue_number", req.IssueNumber,
+		)
+	}
+
+	s.writeJSON(w, http.StatusOK, closeResponse{Closed: true, Recorded: recorded})
+}
+
+type openRequest struct {
+	IssueNumber int64 `json:"issue_number"` // GitHub's API addresses PRs as issues.
+}
+
+type openResponse struct {
+	Opened bool   `json:"opened"`
+	Reason string `json:"reason,omitempty"`
+}
+
+// handleOpenPullRequest answers POST /v1/pulls/open: opens a pull request the app auto-closed.
+func (s *Server) handleOpenPullRequest(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	claims, ok := s.verifyBearer(w, r)
+	if !ok {
+		return
+	}
+
+	var req openRequest
+	if !s.decodeBody(w, r, &req) {
+		return
+	}
+
+	if req.IssueNumber == 0 {
+		s.writeProblem(w, r, http.StatusBadRequest, "issue_number is required")
+		return
+	}
+
+	resp, err := s.openIfAutoClosed(ctx, claims.RepositoryID, claims.Repository, req.IssueNumber)
+	if err != nil {
+		s.logger.Error(
+			"opening pull request",
+			"error", err,
+			"issue_number", req.IssueNumber,
+		)
+		s.writeProblem(w, r, http.StatusInternalServerError, "internal error")
+
+		return
+	}
+
+	s.writeJSON(w, http.StatusOK, resp)
+}
+
+const reasonNotClosedByApp = "not closed by the app"
+
+// openIfAutoClosed opens a pull request the app auto-closed and forgets the
+// record. It is shared by the open endpoint and the after-link flow.
+func (s *Server) openIfAutoClosed(ctx context.Context, repositoryID int64, repo string, issueNumber int64) (openResponse, error) {
+	record, err := s.store.AutoClosedPullRequest(ctx, repositoryID, issueNumber)
+	if errors.Is(err, storage.ErrNotFound) {
+		// The server did not auto-close this pull request, so it never opens
+		// it, no matter who closed it last.
+		return openResponse{Reason: reasonNotClosedByApp}, nil
+	}
+	if err != nil {
+		return openResponse{}, err
+	}
+
+	token, err := s.githubClient.CreateInstallationToken(ctx, repositoryID, repo)
+	if err != nil {
+		return openResponse{}, err
+	}
+
+	pr, err := s.githubClient.FetchPullRequest(ctx, token, repo, issueNumber)
+	if err != nil {
+		return openResponse{}, err
+	}
+
+	if pr.Merged {
+		if err := s.store.DeleteAutoClosedPullRequest(ctx, repositoryID, issueNumber); err != nil {
+			return openResponse{}, err
+		}
+
+		return openResponse{Reason: "merged"}, nil
+	}
+
+	if pr.State == "open" {
+		if err := s.store.DeleteAutoClosedPullRequest(ctx, repositoryID, issueNumber); err != nil {
+			return openResponse{}, err
+		}
+
+		return openResponse{Reason: "already open"}, nil
+	}
+
+	if !pr.ClosedAt.Truncate(time.Second).Equal(record.ClosedAt.Truncate(time.Second)) {
+		if err := s.store.DeleteAutoClosedPullRequest(ctx, repositoryID, issueNumber); err != nil {
+			return openResponse{}, err
+		}
+
+		return openResponse{Reason: "closed by someone else"}, nil
+	}
+
+	if err := s.githubClient.OpenPullRequest(ctx, token, repo, issueNumber); err != nil {
+		return openResponse{}, err
+	}
+
+	if err := s.store.DeleteAutoClosedPullRequest(ctx, repositoryID, issueNumber); err != nil {
+		return openResponse{}, err
+	}
+
+	return openResponse{Opened: true}, nil
 }

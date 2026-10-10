@@ -4,39 +4,39 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 )
 
-// AutoClosedPullRequest records that the action closed a pull request and has
-// not reopened it. Its presence is the flag.
+// AutoClosedPullRequest records that the app closed a pull request and has not opened.
 type AutoClosedPullRequest struct {
 	RepositoryID int64
 	IssueNumber  int64
-	RunID        int64
+	ClosedAt     time.Time
 }
 
-// UpsertAutoClosedPullRequest records that the action closed the pull request.
+// UpsertAutoClosedPullRequest records that the app closed the pull request at closedAt.
 func (s *Store) UpsertAutoClosedPullRequest(
 	ctx context.Context,
 	repositoryID int64,
 	issueNumber int64,
-	runID int64,
+	closedAt time.Time,
 ) error {
 	const query = `
-		INSERT INTO auto_closed_pull_requests (repository_id, issue_number, run_id)
+		INSERT INTO auto_closed_pull_requests (repository_id, issue_number, closed_at)
 		VALUES ($1, $2, $3)
 		ON CONFLICT (repository_id, issue_number) DO UPDATE
-		SET run_id = EXCLUDED.run_id, closed_at = NOW()`
+		SET closed_at = EXCLUDED.closed_at`
 
-	if _, err := s.pool.Exec(ctx, query, repositoryID, issueNumber, runID); err != nil {
+	if _, err := s.pool.Exec(ctx, query, repositoryID, issueNumber, closedAt); err != nil {
 		return fmt.Errorf("storage: upsert auto closed pull request: %w", err)
 	}
 
 	return nil
 }
 
-// DeleteAutoClosedPullRequest forgets that the action closed the pull request.
+// DeleteAutoClosedPullRequest forgets that the app closed the pull request.
 func (s *Store) DeleteAutoClosedPullRequest(
 	ctx context.Context,
 	repositoryID int64,
@@ -54,14 +54,14 @@ func (s *Store) DeleteAutoClosedPullRequest(
 }
 
 // AutoClosedPullRequest returns the record for the pull request, or ErrNotFound
-// when the action has not closed it.
+// when the app has not closed it.
 func (s *Store) AutoClosedPullRequest(
 	ctx context.Context,
 	repositoryID int64,
 	issueNumber int64,
 ) (*AutoClosedPullRequest, error) {
 	const query = `
-		SELECT run_id
+		SELECT closed_at
 		FROM auto_closed_pull_requests
 		WHERE repository_id = $1 AND issue_number = $2`
 
@@ -70,7 +70,7 @@ func (s *Store) AutoClosedPullRequest(
 		IssueNumber:  issueNumber,
 	}
 
-	err := s.pool.QueryRow(ctx, query, repositoryID, issueNumber).Scan(&record.RunID)
+	err := s.pool.QueryRow(ctx, query, repositoryID, issueNumber).Scan(&record.ClosedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}

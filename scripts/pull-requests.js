@@ -1,13 +1,11 @@
 const post = require("./api");
-const closerLogin = process.env.ARBITERER_CLOSER_LOGIN?.trim() || "github-actions[bot]";
 
 /**
- * Closes the pull request and records the close on the server so a passing run
- * can reopen it. Cleanup failure never masks the check itself.
+ * Closes the pull request on the server, and records the close so a passing run can open it again. 
+ * A close is skipped when the pull request is already closed, and an unrecorded close is warned about.
  * @param {Object} options
  * @param {typeof import('@actions/core')} options.core
  * @param {typeof import('@actions/github').context} options.context
- * @param {typeof import('@actions/github')} options.github
  * @param {string} options.reason Why the pull request is being closed.
  * @returns {Promise<void>}
  */
@@ -27,101 +25,54 @@ async function closePullRequest({ core, context, reason }) {
     return;
   }
 
+  if (res?.closed === false) {
+    core.info(`Pull request #${pullNumber} is already closed, leaving it as is.`);
+    return;
+  }
+
+  if (res?.recorded === false) {
+    core.warning(
+      `Closed pull request #${pullNumber} but could not record the close, so a passing run will not open it again.`,
+      { title: "Record failed" },
+    );
+    return;
+  }
+
   core.info(`Closed pull request #${pullNumber} because ${reason}.`);
-  await recordClosed({ core, pullNumber, closed: res?.closed ?? true });
 }
 
 /**
- * Reopens the pull request when the action closed it and it now passes. The
- * server record says the action may have closed it; the timeline confirms it
- * was the last to close it. Cleanup failure never masks the check.
+ * Opens the pull request on the server when a previous run closed it. The
+ * server opens only when the app was the last to close it, it is still
+ * closed, and it is not merged, so a maintainer's close is never overridden.
  * @param {Object} options
  * @param {typeof import('@actions/core')} options.core
  * @param {typeof import('@actions/github').context} options.context
- * @param {typeof import('@actions/github')} options.github
  * @returns {Promise<void>}
  */
-async function reopenPullRequest({ core, context, github }) {
+async function openPullRequest({ core, context }) {
   const pullNumber = context.payload.pull_request?.number;
 
   if (!pullNumber) {
-    core.info("Not reopening: no pull request number in the event payload.");
+    core.info("Not opening: no pull request number in the event payload.");
     return;
   }
 
-  const owner = context.repo.owner;
-  const repo = context.repo.repo;
-
-  let pull;
+  let res;
   try {
-    ({ data: pull } = await github.rest.pulls.get({ owner, repo, pull_number: pullNumber }));
+    res = await post({ core, path: "pulls/open", body: { issue_number: pullNumber } });
   } catch (error) {
-    core.warning(`Could not read pull request #${pullNumber}: ${error.message}`, { title: "Reopen failed" });
+    core.warning(`Could not open pull request #${pullNumber}: ${error.message}`, { title: "Open failed" });
     return;
   }
 
-  if (pull.merged) {
-    core.info(`Not reopening pull request #${pullNumber}: it is merged.`);
+  if (res?.opened) {
+    core.info(`Opened pull request #${pullNumber} because the author is linked and the rules are satisfied.`);
     return;
   }
 
-  if (pull.state === "open") {
-    core.info(`Not reopening pull request #${pullNumber}: it is already open.`);
-    await recordClosed({ core, pullNumber, closed: false });
-    return;
-  }
-
-  if (!(await lastClosedByArbiterer({ core, github, owner, repo, pullNumber }))) {
-    core.info(`Not reopening pull request #${pullNumber}: the action was not the last to close it.`);
-    return;
-  }
-
-  try {
-    await github.rest.pulls.update({ owner, repo, pull_number: pullNumber, state: "open" });
-  } catch (error) {
-    core.warning(`Could not reopen pull request #${pullNumber}: ${error.message}`, { title: "Reopen failed" });
-    return;
-  }
-
-  await recordClosed({ core, pullNumber, closed: false });
-  core.info(`Reopened pull request #${pullNumber} because the author is linked and the rules are satisfied.`);
+  const reason = res?.reason ? `: ${res.reason}` : "";
+  core.info(`Not opening pull request #${pullNumber}${reason}.`);
 }
 
-// lastClosedByArbiterer reports whether the most recent close of the pull
-// request was made by the closer login. Any ambiguity means no.
-async function lastClosedByArbiterer({ core, github, owner, repo, pullNumber }) {
-  let events;
-  try {
-    events = await github.paginate(github.rest.issues.listEventsForTimeline, {
-      owner,
-      repo,
-      issue_number: pullNumber,
-      per_page: 100,
-    });
-  } catch (error) {
-    core.warning(`Could not determine who closed pull request #${pullNumber}: ${error.message}`, { title: "Reopen skipped" });
-    return false;
-  }
-
-  for (let i = events.length - 1; i >= 0; i--) {
-    if (events[i].event === "closed") {
-      return events[i].actor?.login === closerLogin;
-    }
-  }
-
-  return false;
-}
-
-// recordClosed tells the server whether the action closed the pull request.
-// Failure is cleanup, never the check itself.
-async function recordClosed({ core, pullNumber, closed }) {
-  try {
-    await post({ core, path: "pulls/closed", body: { issue_number: pullNumber, closed } });
-  } catch (error) {
-    core.warning(`Could not record pull request #${pullNumber} as ${closed ? "closed by the action" : "reopened"} on the server: ${error.message}`, {
-      title: "State not recorded",
-    });
-  }
-}
-
-module.exports = { closePullRequest, reopenPullRequest };
+module.exports = { closePullRequest, openPullRequest };
