@@ -585,12 +585,6 @@ func (s *Server) openAfterLink(ctx context.Context, lc linkCookie) {
 func (s *Server) rerunAfterLink(ctx context.Context, lc linkCookie) {
 	jobID, err := s.store.TakeSetupCommentRerunJob(ctx, lc.RepositoryID, lc.IssueNumber)
 	if errors.Is(err, storage.ErrNotFound) {
-		s.logger.Debug(
-			"no pending rerun",
-			"repository", lc.Repository,
-			"issue_number", lc.IssueNumber,
-		)
-
 		return
 	}
 
