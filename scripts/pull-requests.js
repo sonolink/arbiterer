@@ -1,15 +1,16 @@
 const post = require("./api");
 
 /**
- * Closes the pull request on the server, and records the close so a passing run can open it again. 
+ * Closes the pull request on the server, and records the close so a passing run can open it again.
  * A close is skipped when the pull request is already closed, and an unrecorded close is warned about.
  * @param {Object} options
  * @param {typeof import('@actions/core')} options.core
  * @param {typeof import('@actions/github').context} options.context
  * @param {string} options.reason Why the pull request is being closed.
+ * @param {boolean} [options.rulesFailed] Close for failed rules and comment why.
  * @returns {Promise<void>}
  */
-async function closePullRequest({ core, context, reason }) {
+async function closePullRequest({ core, context, reason, rulesFailed = false }) {
   const pullNumber = context.payload.pull_request?.number;
 
   if (!pullNumber) {
@@ -17,9 +18,15 @@ async function closePullRequest({ core, context, reason }) {
     return;
   }
 
+  const body = { issue_number: pullNumber };
+
+  if (rulesFailed) {
+    body.rules_failed = true;
+  }
+
   let res;
   try {
-    res = await post({ core, path: "pulls/close", body: { issue_number: pullNumber } });
+    res = await post({ core, path: "pulls/close", body });
   } catch (error) {
     core.warning(`Could not close pull request #${pullNumber}: ${error.message}`, { title: "Close failed" });
     return;
@@ -31,10 +38,7 @@ async function closePullRequest({ core, context, reason }) {
   }
 
   if (res?.recorded === false) {
-    core.warning(
-      `Closed pull request #${pullNumber} but could not record the close, so a passing run will not open it again.`,
-      { title: "Record failed" },
-    );
+    core.warning(`Closed pull request #${pullNumber} but could not record the close, so a passing run will not open it again.`, { title: "Record failed" });
     return;
   }
 

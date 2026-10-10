@@ -24,7 +24,7 @@ inputs:
 
 outputs:
   status:
-    description: Link status of the pull request author (`unlinked`, `github_verified`, `linked` or `revoked`).
+    description: Link status of the pull request author (`unlinked`, `linked` or `revoked`).
     value: ${{ steps.request.outputs.status }}
   link-url:
     description: URL where the author can link or re-link their accounts. Empty when already linked.

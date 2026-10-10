@@ -26,9 +26,10 @@ const (
 	// has not yet authorized Discord. It is never served by resolve.
 	commentGitHubVerified commentStatus = "github_verified"
 
-	commentUnlinked commentStatus = "unlinked"
-	commentLinked   commentStatus = "linked"
-	commentRevoked  commentStatus = "revoked"
+	commentUnlinked    commentStatus = "unlinked"
+	commentLinked      commentStatus = "linked"
+	commentRevoked     commentStatus = "revoked"
+	commentRulesFailed commentStatus = "rules_failed"
 )
 
 // setupSteps lists the steps a contributor must complete and links the next open step to linkURL.
@@ -65,6 +66,14 @@ func formatCommentBody(author string, status commentStatus, linkURL string) stri
 		b.WriteString("your GitHub and Discord accounts are linked.")
 	case commentRevoked:
 		b.WriteString("your Discord link has expired or was revoked. Please follow these steps to link it again:")
+	case commentRulesFailed:
+		b.WriteString("your pull request was closed because you don't satisfy the pre-defined rules.")
+
+		if linkURL != "" {
+			fmt.Fprintf(&b, " [See more here](%s).", linkURL)
+		}
+
+		return b.String()
 	default:
 		b.WriteString("please follow these steps to continue:")
 	}
@@ -177,6 +186,7 @@ func (s *Server) logSetupCommentError(err error) {
 
 type closeRequest struct {
 	IssueNumber int64 `json:"issue_number"` // GitHub's API addresses PRs as issues.
+	RulesFailed bool  `json:"rules_failed,omitempty"`
 }
 
 type closeResponse struct {
@@ -219,6 +229,10 @@ func (s *Server) handleClosePullRequest(w http.ResponseWriter, r *http.Request) 
 
 	if pr.State != "open" {
 		// Already closed or merged: not the app's close to record or undo.
+		if req.RulesFailed && !pr.Merged {
+			s.refreshRulesFailed(ctx, claims, req.IssueNumber)
+		}
+
 		s.writeJSON(w, http.StatusOK, closeResponse{})
 
 		return
@@ -241,7 +255,52 @@ func (s *Server) handleClosePullRequest(w http.ResponseWriter, r *http.Request) 
 		)
 	}
 
+	if req.RulesFailed {
+		s.notifyRulesFailed(ctx, claims, req.IssueNumber)
+	}
+
 	s.writeJSON(w, http.StatusOK, closeResponse{Closed: true, Recorded: recorded})
+}
+
+// notifyRulesFailed reconciles the setup comment to explain that failed rules
+// closed the pull request.
+func (s *Server) notifyRulesFailed(ctx context.Context, claims *github.Claims, issueNumber int64) {
+	if err := s.syncSetupComment(
+		ctx,
+		claims.RepositoryID,
+		claims.Repository,
+		issueNumber,
+		commentRulesFailed,
+		workflowRunURL(claims),
+		false,
+	); err != nil {
+		s.logSetupCommentError(err)
+	}
+}
+
+// refreshRulesFailed re-points the rules notice at the latest run.
+func (s *Server) refreshRulesFailed(ctx context.Context, claims *github.Claims, issueNumber int64) {
+	if _, err := s.store.AutoClosedPullRequest(ctx, claims.RepositoryID, issueNumber); err != nil {
+		if !errors.Is(err, storage.ErrNotFound) {
+			s.logger.Error(
+				"reading auto-closed record",
+				"error", err,
+				"issue_number", issueNumber,
+			)
+		}
+
+		return
+	}
+
+	s.notifyRulesFailed(ctx, claims, issueNumber)
+}
+
+func workflowRunURL(claims *github.Claims) string {
+	if claims.RunID == 0 {
+		return ""
+	}
+
+	return fmt.Sprintf("https://github.com/%s/actions/runs/%d", claims.Repository, claims.RunID)
 }
 
 type openRequest struct {

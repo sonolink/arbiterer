@@ -55,7 +55,7 @@ module.exports = async function evaluateRules({ core, context, github, user, aut
 
   if (closeOnFailure) {
     if (rulesFailed) {
-      await closePullRequest({ core, context, reason: "rules were not satisfied" });
+      await closePullRequest({ core, context, reason: "rules were not satisfied", rulesFailed: true });
     } else if (autoClosed) {
       await openPullRequest({ core, context });
     }

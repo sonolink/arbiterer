@@ -15,7 +15,14 @@ CREATE TABLE github_discord_connections (
   UNIQUE (discord_user_id, repository_id)
 );
 
-CREATE TYPE setup_comment_status AS ENUM ('unlinked', 'github_verified', 'linked', 'revoked', 'not_a_member');
+CREATE TYPE setup_comment_status AS ENUM (
+  'unlinked',
+  'github_verified',
+  'linked',
+  'revoked',
+  'not_a_member',
+  'rules_failed'
+);
 
 CREATE TABLE setup_comments (
   repository_id BIGINT NOT NULL,
