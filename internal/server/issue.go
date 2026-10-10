@@ -184,7 +184,7 @@ type closeResponse struct {
 	Recorded bool `json:"recorded"`
 }
 
-// handleClosePullRequest  answers POST /v1/pulls/close.
+// handleClosePullRequest answers POST /v1/pulls/close.
 func (s *Server) handleClosePullRequest(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 

@@ -2,34 +2,35 @@ name: Resolve Discord link
 description: >-
   Resolve a GitHub user's Discord account through Arbiterer using GitHub OIDC. The calling job needs the
   `id-token: write` permission. Note: for pull requests from forks, the workflow must use `on: pull_request_target`.
+
 inputs:
   close-on-failure:
-    description: Close the pull request when the rules script fails it, or when the author has not linked their
-      accounts, and open it once the author has linked and the rules are satisfied. Set to false to leave the
-      pull request open with a failing check.
+    description: Close the pull request when the author has not linked their accounts or fails the rules, and
+      open it again once they pass. Requires the workflow to also trigger on `reopened`.
     required: false
     default: "false"
   comment-on-linked:
-    description: Post a comment on the pull request confirming that the author is already linked. Set to false to only
-      comment when the author still has to act. A comment that earlier asked them to act is always updated.
+    description: Comment on the pull request when the author is already linked. Set to false to comment only
+      while the author still needs to link. An earlier request to link is always updated once they do.
     required: false
     default: "true"
   rules:
     description: >-
-      Optional JavaScript that decides whether the pull request author passes. It runs with `user`, the
-      author's linked Discord account, and `resolveMember(guildId)`, which resolves the author's member
-      record or null. Call core.setFailed to reject. Leave empty to require only a linked Discord account.
+      Optional JavaScript that decides whether the author passes. It can read `user` (their linked Discord
+      account) and call `resolveMember(guildId)` to get their member record in a server, or null if they
+      aren't a member. Call `core.setFailed` to reject. Leave empty to require only a linked account.
     required: false
     default: ""
+
 outputs:
   status:
-    description: Account link status returned by Arbiterer.
+    description: Link status of the pull request author (`unlinked`, `github_verified`, `linked` or `revoked`).
     value: ${{ steps.request.outputs.status }}
   link-url:
-    description: URL for linking or re-linking an account.
+    description: URL where the author can link or re-link their accounts. Empty when already linked.
     value: ${{ steps.request.outputs.link-url }}
   user:
-    description: Raw Discord user object if the author has linked their account, otherwise null.
+    description: The author's Discord user object as JSON when linked, otherwise empty.
     value: ${{ steps.request.outputs.user }}
 
 runs:
