@@ -34,24 +34,24 @@ const (
 
 // setupSteps lists the steps a contributor must complete and links the next open step to linkURL.
 func setupSteps(status commentStatus, linkURL string) []setupStep {
-	signInGitHub := setupStep{text: "Sign in with GitHub"}
-	signInDiscord := setupStep{text: "Sign in with Discord"}
+	authorizeGitHub := setupStep{text: "Authorize GitHub"}
+	authorizeDiscord := setupStep{text: "Authorize Discord"}
 
 	switch status {
 	case commentLinked:
 		// Nothing left to do; the comment confirms the link or clears an earlier ask.
-		signInGitHub.done = true
-		signInDiscord.done = true
+		authorizeGitHub.done = true
+		authorizeDiscord.done = true
 	case commentGitHubVerified:
 		// Resumes at the Discord step via the cookie set in the GitHub callback.
-		signInGitHub.done = true
-		signInDiscord.text = fmt.Sprintf("[%s](%s)", signInDiscord.text, linkURL)
+		authorizeGitHub.done = true
+		authorizeDiscord.text = fmt.Sprintf("[%s](%s)", authorizeDiscord.text, linkURL)
 	default:
 		// commentUnlinked, commentRevoked, and anything new start at GitHub.
-		signInGitHub.text = fmt.Sprintf("[%s](%s)", signInGitHub.text, linkURL)
+		authorizeGitHub.text = fmt.Sprintf("[%s](%s)", authorizeGitHub.text, linkURL)
 	}
 
-	return []setupStep{signInGitHub, signInDiscord}
+	return []setupStep{authorizeGitHub, authorizeDiscord}
 }
 
 // formatCommentBody renders the setup comment for a contributor in the given
@@ -78,9 +78,23 @@ func formatCommentBody(author string, status commentStatus, linkURL string) stri
 		b.WriteString("please follow these steps to continue:")
 	}
 
+	steps := setupSteps(status, linkURL)
+
+	remaining := false
+	for _, step := range steps {
+		if !step.done {
+			remaining = true
+			break
+		}
+	}
+
+	if !remaining {
+		return b.String()
+	}
+
 	b.WriteString("\n")
 
-	for i, step := range setupSteps(status, linkURL) {
+	for i, step := range steps {
 		text := step.text
 		if step.done {
 			text = "~~" + text + "~~"
