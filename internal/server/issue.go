@@ -67,7 +67,7 @@ func formatCommentBody(author string, status commentStatus, linkURL string) stri
 	case commentRevoked:
 		b.WriteString("your Discord link has expired or was revoked. Please follow these steps to link it again:")
 	case commentRulesFailed:
-		b.WriteString("your pull request was closed because you don't satisfy the pre-defined rules.")
+		b.WriteString("you didn't satisfy the pre-defined rules.")
 
 		if linkURL != "" {
 			fmt.Fprintf(&b, " [See more here](%s).", linkURL)
@@ -241,12 +241,12 @@ func (s *Server) handleClosePullRequest(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	if req.RulesFailed && !pr.Merged {
+		s.notifyRulesFailed(ctx, claims, req.IssueNumber)
+	}
+
 	if pr.State != "open" {
 		// Already closed or merged: not the app's close to record or undo.
-		if req.RulesFailed && !pr.Merged {
-			s.refreshRulesFailed(ctx, claims, req.IssueNumber)
-		}
-
 		s.writeJSON(w, http.StatusOK, closeResponse{})
 
 		return
@@ -269,15 +269,55 @@ func (s *Server) handleClosePullRequest(w http.ResponseWriter, r *http.Request) 
 		)
 	}
 
-	if req.RulesFailed {
-		s.notifyRulesFailed(ctx, claims, req.IssueNumber)
-	}
-
 	s.writeJSON(w, http.StatusOK, closeResponse{Closed: true, Recorded: recorded})
 }
 
-// notifyRulesFailed reconciles the setup comment to explain that failed rules
-// closed the pull request.
+type rulesFailedRequest struct {
+	IssueNumber int64 `json:"issue_number"` // GitHub's API addresses PRs as issues.
+}
+
+// handleRulesFailed answers POST /v1/pulls/rules-failed.
+func (s *Server) handleRulesFailed(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	claims, ok := s.verifyBearer(w, r)
+	if !ok {
+		return
+	}
+
+	var req rulesFailedRequest
+	if !s.decodeBody(w, r, &req) {
+		return
+	}
+
+	if req.IssueNumber == 0 {
+		s.writeProblem(w, r, http.StatusBadRequest, "issue_number is required")
+		return
+	}
+
+	token, err := s.githubClient.CreateInstallationToken(ctx, claims.RepositoryID, claims.Repository)
+	if err != nil {
+		s.logger.Error("creating installation token", "error", err)
+		s.writeProblem(w, r, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	pr, err := s.githubClient.FetchPullRequest(ctx, token, claims.Repository, req.IssueNumber)
+	if err != nil {
+		s.logger.Error("fetching pull request", "error", err)
+		s.writeProblem(w, r, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	if !pr.Merged {
+		s.notifyRulesFailed(ctx, claims, req.IssueNumber)
+	}
+
+	s.writeJSON(w, http.StatusOK, struct{}{})
+}
+
+// notifyRulesFailed reconciles the setup comment to explain that the author did
+// not satisfy the rules.
 func (s *Server) notifyRulesFailed(ctx context.Context, claims *github.Claims, issueNumber int64) {
 	if err := s.syncSetupComment(
 		ctx,
@@ -290,23 +330,6 @@ func (s *Server) notifyRulesFailed(ctx context.Context, claims *github.Claims, i
 	); err != nil {
 		s.logSetupCommentError(err)
 	}
-}
-
-// refreshRulesFailed re-points the rules notice at the latest run.
-func (s *Server) refreshRulesFailed(ctx context.Context, claims *github.Claims, issueNumber int64) {
-	if _, err := s.store.AutoClosedPullRequest(ctx, claims.RepositoryID, issueNumber); err != nil {
-		if !errors.Is(err, storage.ErrNotFound) {
-			s.logger.Error(
-				"reading auto-closed record",
-				"error", err,
-				"issue_number", issueNumber,
-			)
-		}
-
-		return
-	}
-
-	s.notifyRulesFailed(ctx, claims, issueNumber)
 }
 
 func workflowRunURL(claims *github.Claims) string {

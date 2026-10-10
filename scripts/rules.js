@@ -1,4 +1,4 @@
-const { closePullRequest, openPullRequest } = require("./pull-requests");
+const { closePullRequest, openPullRequest, notifyRulesFailed } = require("./pull-requests");
 const rulesSource = process.env.ARBITERER_RULES?.trim() || "";
 const rulesMaxBytes = 40 * 1024; // 40 KiB (GitHub caps a single env var at 48 KiB).
 if (rulesSource && Buffer.byteLength(rulesSource, "utf8") > rulesMaxBytes) {
@@ -59,5 +59,7 @@ module.exports = async function evaluateRules({ core, context, github, user, aut
     } else if (autoClosed) {
       await openPullRequest({ core, context });
     }
+  } else if (rulesFailed) {
+    await notifyRulesFailed({ core, context });
   }
 };

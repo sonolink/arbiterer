@@ -79,4 +79,35 @@ async function openPullRequest({ core, context }) {
   core.info(`Not opening pull request #${pullNumber}${reason}.`);
 }
 
-module.exports = { closePullRequest, openPullRequest };
+/**
+ * Updates the setup comment to report that the author did not satisfy the
+ * rules, without closing the pull request. Used when close-on-failure is off,
+ * so the failure still shows up on the pull request.
+ * @param {Object} options
+ * @param {typeof import('@actions/core')} options.core
+ * @param {typeof import('@actions/github').context} options.context
+ * @returns {Promise<void>}
+ */
+async function notifyRulesFailed({ core, context }) {
+  const pullNumber = context.payload.pull_request?.number;
+
+  if (!pullNumber) {
+    core.info("Not updating the rules comment: no pull request number in the event payload.");
+    return;
+  }
+
+  try {
+    await post({
+      core,
+      path: "pulls/rules-failed",
+      body: { issue_number: pullNumber },
+    });
+  } catch (error) {
+    core.warning(`Could not update the rules comment on pull request #${pullNumber}: ${error.message}`, { title: "Rules comment failed" });
+    return;
+  }
+
+  core.info(`Updated pull request #${pullNumber} to report that the rules were not satisfied.`);
+}
+
+module.exports = { closePullRequest, notifyRulesFailed, openPullRequest };

@@ -56,6 +56,7 @@ func (s *Server) addRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /v1/discord/resolve", s.handleResolve)
 	mux.HandleFunc("POST /v1/discord/member", s.handleMember)
 	mux.HandleFunc("POST /v1/pulls/close", s.handleClosePullRequest)
+	mux.HandleFunc("POST /v1/pulls/rules-failed", s.handleRulesFailed)
 	mux.HandleFunc("POST /v1/pulls/open", s.handleOpenPullRequest)
 	mux.HandleFunc("GET /link", s.handleLink)
 	mux.HandleFunc("GET /link/github/callback", s.handleLinkGitHubCallback)
