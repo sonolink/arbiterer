@@ -456,6 +456,13 @@ func (s *Server) recordPendingRerun(
 	}
 
 	if claims.CheckRunID == 0 {
+		s.logger.Debug(
+			"no check run id in claims; not recording pending rerun",
+			"repository", claims.Repository,
+			"issue_number", issueNumber,
+			"status", status,
+		)
+
 		return
 	}
 
