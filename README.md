@@ -64,11 +64,11 @@ That's all you need if authors only have to link their accounts. To enforce cond
 
 All inputs are optional.
 
-| Input               | Description                                                                                                                                                                                              | Default |
-| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- |
-| `rules`             | JavaScript that decides whether the author passes. See [Rules](#rules). Leave empty to only require a linked Discord account.                                                                            | `""`    |
-| `close-on-failure`  | Close the pull request when the rules script fails it. Set to `false` to leave the pull request open with a failing check.                                                                               | `false` |
-| `comment-on-linked` | Post a comment on the pull request confirming the author is already linked. Set to `false` to only comment when the author still has to act. A comment that earlier asked them to act is always updated. | `true`  |
+| Input               | Description                                                                                                                                                                                                                           | Default |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- |
+| `rules`             | JavaScript that decides whether the author passes. See [Rules](#rules). Leave empty to only require a linked Discord account.                                                                                                         | `""`    |
+| `close-on-failure`  | Close the pull request when the author has not linked their accounts or fails the rules, and open it again once they pass. Needs the `pull_requests: write` permission on the Arbiterer app and `reopened` in the workflow's `types`. | `false` |
+| `comment-on-linked` | Post a comment on the pull request confirming the author is already linked. Set to `false` to only comment when the author still has to act. A comment that earlier asked them to act is always updated.                              | `true`  |
 
 ### Rules
 
