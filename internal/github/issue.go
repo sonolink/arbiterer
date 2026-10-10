@@ -113,6 +113,22 @@ func (c *Client) OpenPullRequest(ctx context.Context, token, repo string, issueN
 	return err
 }
 
+// RerunJob asks GitHub to re-run a single workflow job.
+func (c *Client) RerunJob(ctx context.Context, token, repo string, jobID int64) error {
+	if err := c.sendRequest(
+		ctx,
+		http.MethodPost,
+		fmt.Sprintf("/repos/%s/actions/jobs/%d/rerun", repo, jobID),
+		token,
+		map[string]any{},
+		nil,
+	); err != nil {
+		return fmt.Errorf("github: rerunning job %d: %w", jobID, err)
+	}
+
+	return nil
+}
+
 func (c *Client) setPullRequestState(ctx context.Context, token, repo string, issueNumber int64, state string) (*PullRequest, error) {
 	var pr PullRequest
 	if err := c.sendRequest(

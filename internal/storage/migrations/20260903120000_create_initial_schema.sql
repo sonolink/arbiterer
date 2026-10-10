@@ -29,6 +29,7 @@ CREATE TABLE setup_comments (
   issue_number BIGINT NOT NULL,
   comment_id BIGINT NOT NULL,
   status setup_comment_status NOT NULL,
+  rerun_job_id BIGINT,
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   PRIMARY KEY (repository_id, issue_number)
 );
