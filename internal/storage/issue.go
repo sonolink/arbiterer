@@ -9,7 +9,7 @@ import (
 )
 
 // SetupComment is the comment the app posted on a pull request telling its
-// author how to link their accounts, along with the status it last reported.
+// author how to link, along with the status it last reported.
 type SetupComment struct {
 	RepositoryID int64
 	IssueNumber  int64
@@ -71,6 +71,65 @@ func (s *Store) UpsertSetupComment(ctx context.Context, comment *SetupComment) e
 		comment.Status,
 	); err != nil {
 		return fmt.Errorf("storage: upsert setup comment: %w", err)
+	}
+
+	return nil
+}
+
+// SetSetupCommentRerunJob stores the job to re-run once the author links,
+// replacing any previously stored one.
+func (s *Store) SetSetupCommentRerunJob(
+	ctx context.Context,
+	repositoryID int64,
+	issueNumber int64,
+	jobID int64,
+) error {
+	const query = `
+		UPDATE setup_comments
+		SET rerun_job_id = $3,
+			updated_at = NOW()
+		WHERE repository_id = $1 AND issue_number = $2`
+
+	if _, err := s.pool.Exec(ctx, query, repositoryID, issueNumber, jobID); err != nil {
+		return fmt.Errorf("storage: set setup comment rerun job: %w", err)
+	}
+
+	return nil
+}
+
+// TakeSetupCommentRerunJob clears and returns the job stored for the pull
+// request, or ErrNotFound when none is stored.
+func (s *Store) TakeSetupCommentRerunJob(ctx context.Context, repositoryID, issueNumber int64) (int64, error) {
+	const query = `
+		UPDATE setup_comments
+		SET rerun_job_id = NULL,
+			updated_at = NOW()
+		WHERE repository_id = $1 AND issue_number = $2 AND rerun_job_id IS NOT NULL
+		RETURNING old.rerun_job_id`
+
+	var jobID int64
+	err := s.pool.QueryRow(ctx, query, repositoryID, issueNumber).Scan(&jobID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return 0, ErrNotFound
+	}
+
+	if err != nil {
+		return 0, fmt.Errorf("storage: take setup comment rerun job: %w", err)
+	}
+
+	return jobID, nil
+}
+
+// ClearSetupCommentRerunJob forgets the job stored for the pull request.
+func (s *Store) ClearSetupCommentRerunJob(ctx context.Context, repositoryID, issueNumber int64) error {
+	const query = `
+		UPDATE setup_comments
+		SET rerun_job_id = NULL,
+			updated_at = NOW()
+		WHERE repository_id = $1 AND issue_number = $2`
+
+	if _, err := s.pool.Exec(ctx, query, repositoryID, issueNumber); err != nil {
+		return fmt.Errorf("storage: clear setup comment rerun job: %w", err)
 	}
 
 	return nil

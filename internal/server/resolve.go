@@ -38,9 +38,10 @@ const (
 )
 
 type resolveResponse struct {
-	Status  resolveStatus   `json:"status"`
-	User    json.RawMessage `json:"user,omitempty"`
-	LinkURL string          `json:"link_url,omitempty"`
+	Status            resolveStatus   `json:"status"`
+	User              json.RawMessage `json:"user,omitempty"`
+	LinkURL           string          `json:"link_url,omitempty"`
+	ClosedByArbiterer bool            `json:"closed_by_arbiterer,omitempty"`
 
 	// AppInstallURL is set when the app is not installed on the repository, so
 	// it could not post the setup comment.
@@ -399,6 +400,15 @@ func (s *Server) handleResolve(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	if resp.Status == statusLinked {
+		closed, err := s.store.AutoClosedPullRequest(ctx, claims.RepositoryID, req.IssueNumber)
+		if err != nil && !errors.Is(err, storage.ErrNotFound) {
+			s.logger.Error("reading auto-closed record", "error", err, "issue_number", req.IssueNumber)
+		} else {
+			resp.ClosedByArbiterer = closed != nil
+		}
+	}
+
 	if err := s.syncSetupComment(
 		ctx,
 		claims.RepositoryID,
@@ -415,7 +425,53 @@ func (s *Server) handleResolve(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	s.recordPendingRerun(ctx, claims, req.IssueNumber, resp.Status)
+
 	s.writeJSON(w, http.StatusOK, resp)
+}
+
+// recordPendingRerun stores the job to re-run once an unlinked author links, or
+// clears it when the author is linked.
+func (s *Server) recordPendingRerun(
+	ctx context.Context,
+	claims *github.Claims,
+	issueNumber int64,
+	status resolveStatus,
+) {
+	if issueNumber == 0 {
+		return
+	}
+
+	if status == statusLinked {
+		if err := s.store.ClearSetupCommentRerunJob(ctx, claims.RepositoryID, issueNumber); err != nil {
+			s.logger.Error(
+				"clearing pending rerun",
+				"error", err,
+				"repository", claims.Repository,
+				"issue_number", issueNumber,
+			)
+		}
+
+		return
+	}
+
+	if claims.CheckRunID == 0 {
+		return
+	}
+
+	if err := s.store.SetSetupCommentRerunJob(
+		ctx,
+		claims.RepositoryID,
+		issueNumber,
+		claims.CheckRunID,
+	); err != nil {
+		s.logger.Error(
+			"recording pending rerun",
+			"error", err,
+			"repository", claims.Repository,
+			"issue_number", issueNumber,
+		)
+	}
 }
 
 // appInstallURL returns the page where a maintainer installs the app on the

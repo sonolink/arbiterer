@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/subtle"
 	"encoding/base64"
@@ -536,6 +537,106 @@ func (s *Server) handleLinkDiscordCallback(w http.ResponseWriter, r *http.Reques
 		s.logSetupCommentError(err)
 	}
 
-	prUrl := fmt.Sprintf("https://github.com/%s/pull/%d", lc.Repository, lc.IssueNumber)
-	http.Redirect(w, r, prUrl, http.StatusSeeOther)
+	s.openAfterLink(ctx, lc)
+
+	prURL := fmt.Sprintf("https://github.com/%s/pull/%d", lc.Repository, lc.IssueNumber)
+	http.Redirect(w, r, prURL, http.StatusSeeOther)
+}
+
+// openAfterLink opens the pull request the app auto-closed before the author
+// linked, or re-runs the job that reported them unlinked when it stayed open.
+func (s *Server) openAfterLink(ctx context.Context, lc linkCookie) {
+	if lc.Repository == "" || lc.IssueNumber == 0 {
+		return
+	}
+
+	resp, err := s.openIfAutoClosed(ctx, lc.RepositoryID, lc.Repository, lc.IssueNumber)
+	if err != nil {
+		s.logger.Error(
+			"opening auto-closed pull request after account link",
+			"error", err,
+			"repository", lc.Repository,
+			"issue_number", lc.IssueNumber,
+		)
+	} else if resp.Opened {
+		s.logger.Info(
+			"opened pull request after account link",
+			"repository", lc.Repository,
+			"issue_number", lc.IssueNumber,
+		)
+
+		s.clearPendingRerun(ctx, lc)
+
+		return
+	} else if resp.Reason != "" && resp.Reason != reasonNotClosedByApp {
+		s.logger.Debug(
+			"keeping pull request closed after account link",
+			"reason", resp.Reason,
+			"repository", lc.Repository,
+			"issue_number", lc.IssueNumber,
+		)
+	}
+
+	s.rerunAfterLink(ctx, lc)
+}
+
+// rerunAfterLink re-runs the job that posted the linking comment, clearing the
+// stored job whether or not GitHub accepts the re-run.
+func (s *Server) rerunAfterLink(ctx context.Context, lc linkCookie) {
+	jobID, err := s.store.TakeSetupCommentRerunJob(ctx, lc.RepositoryID, lc.IssueNumber)
+	if errors.Is(err, storage.ErrNotFound) {
+		return
+	}
+
+	if err != nil {
+		s.logger.Error(
+			"taking pending rerun",
+			"error", err,
+			"repository", lc.Repository,
+			"issue_number", lc.IssueNumber,
+		)
+
+		return
+	}
+
+	token, err := s.githubClient.CreateInstallationToken(ctx, lc.RepositoryID, lc.Repository)
+	if err != nil {
+		s.logger.Warn(
+			"skipping job rerun: cannot create installation token",
+			"error", err,
+			"repository", lc.Repository,
+			"job_id", jobID,
+		)
+
+		return
+	}
+
+	if err := s.githubClient.RerunJob(ctx, token, lc.Repository, jobID); err != nil {
+		s.logger.Warn(
+			"skipping job rerun: GitHub rejected the request",
+			"error", err,
+			"repository", lc.Repository,
+			"job_id", jobID,
+		)
+
+		return
+	}
+
+	s.logger.Info(
+		"rerunning job after account link",
+		"repository", lc.Repository,
+		"job_id", jobID,
+	)
+}
+
+// clearPendingRerun clears any job stored for the pull request.
+func (s *Server) clearPendingRerun(ctx context.Context, lc linkCookie) {
+	if err := s.store.ClearSetupCommentRerunJob(ctx, lc.RepositoryID, lc.IssueNumber); err != nil {
+		s.logger.Error(
+			"clearing pending rerun",
+			"error", err,
+			"repository", lc.Repository,
+			"issue_number", lc.IssueNumber,
+		)
+	}
 }

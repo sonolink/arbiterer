@@ -15,14 +15,29 @@ CREATE TABLE github_discord_connections (
   UNIQUE (discord_user_id, repository_id)
 );
 
-CREATE TYPE setup_comment_status AS ENUM ('unlinked', 'github_verified', 'linked', 'revoked', 'not_a_member');
+CREATE TYPE setup_comment_status AS ENUM (
+  'unlinked',
+  'github_verified',
+  'linked',
+  'revoked',
+  'not_a_member',
+  'rules_failed'
+);
 
 CREATE TABLE setup_comments (
   repository_id BIGINT NOT NULL,
   issue_number BIGINT NOT NULL,
   comment_id BIGINT NOT NULL,
   status setup_comment_status NOT NULL,
+  rerun_job_id BIGINT,
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (repository_id, issue_number)
+);
+
+CREATE TABLE auto_closed_pull_requests (
+  repository_id BIGINT NOT NULL,
+  issue_number BIGINT NOT NULL,
+  closed_at TIMESTAMPTZ NOT NULL,
   PRIMARY KEY (repository_id, issue_number)
 );
 
@@ -30,4 +45,5 @@ CREATE TABLE setup_comments (
 DROP TABLE IF EXISTS github_discord_connections CASCADE;
 DROP TABLE IF EXISTS discord_users CASCADE;
 DROP TABLE IF EXISTS setup_comments CASCADE;
+DROP TABLE IF EXISTS auto_closed_pull_requests CASCADE;
 DROP TYPE IF EXISTS setup_comment_status;
