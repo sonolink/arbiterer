@@ -52,13 +52,16 @@ func New(
 }
 
 func (s *Server) addRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("GET /healthz", s.handleHealth)
-	mux.HandleFunc("POST /v1/discord/resolve", s.handleResolve)
-	mux.HandleFunc("POST /v1/discord/member", s.handleMember)
-	mux.HandleFunc("GET /link", s.handleLink)
-	mux.HandleFunc("GET /link/github/callback", s.handleLinkGitHubCallback)
-	mux.HandleFunc("GET /link/discord", s.handleLinkDiscord)
-	mux.HandleFunc("GET /link/discord/callback", s.handleLinkDiscordCallback)
+	mux.HandleFunc("GET /v1/healthz", s.handleHealth)
+	mux.HandleFunc("POST /v1/discord/resolve", s.handleDiscordResolve)
+	mux.HandleFunc("POST /v1/discord/member", s.handleDiscordMember)
+	mux.HandleFunc("POST /v1/github/pulls/close", s.handleGitHubPullRequestClose)
+	mux.HandleFunc("POST /v1/github/pulls/rules-failed", s.handleGitHubPullRequestRulesFailed)
+	mux.HandleFunc("POST /v1/github/pulls/open", s.handleGitHubPullRequestOpen)
+	mux.HandleFunc("GET /v1/link", s.handleLink)
+	mux.HandleFunc("GET /v1/link/github/callback", s.handleLinkGitHubCallback)
+	mux.HandleFunc("GET /v1/link/discord", s.handleLinkDiscord)
+	mux.HandleFunc("GET /v1/link/discord/callback", s.handleLinkDiscordCallback)
 }
 
 // Run starts the HTTP server and blocks until it stops, draining in-flight
