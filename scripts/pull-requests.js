@@ -26,7 +26,7 @@ async function closePullRequest({ core, context, reason, rulesFailed = false }) 
 
   let res;
   try {
-    res = await post({ core, path: "pulls/close", body });
+    res = await post({ core, path: "github/pulls/close", body });
   } catch (error) {
     core.warning(`Could not close pull request #${pullNumber}: ${error.message}`, { title: "Close failed" });
     return;
@@ -64,7 +64,7 @@ async function openPullRequest({ core, context }) {
 
   let res;
   try {
-    res = await post({ core, path: "pulls/open", body: { issue_number: pullNumber } });
+    res = await post({ core, path: "github/pulls/open", body: { issue_number: pullNumber } });
   } catch (error) {
     core.warning(`Could not open pull request #${pullNumber}: ${error.message}`, { title: "Open failed" });
     return;
@@ -99,7 +99,7 @@ async function notifyRulesFailed({ core, context }) {
   try {
     await post({
       core,
-      path: "pulls/rules-failed",
+      path: "github/pulls/rules-failed",
       body: { issue_number: pullNumber },
     });
   } catch (error) {
