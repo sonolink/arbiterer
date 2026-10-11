@@ -338,7 +338,7 @@ func (s *Server) revokedResponse(lt linkToken) (resolveResponse, error) {
 	}, nil
 }
 
-func (s *Server) handleResolve(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleDiscordResolve(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	claims, ok := s.verifyBearer(w, r)

@@ -21,8 +21,8 @@ type closeResponse struct {
 	Recorded bool `json:"recorded"`
 }
 
-// handlePullRequestClose answers POST /v1/github/pulls/close.
-func (s *Server) handlePullRequestClose(w http.ResponseWriter, r *http.Request) {
+// handleGitHubPullRequestClose answers POST /v1/github/pulls/close.
+func (s *Server) handleGitHubPullRequestClose(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	claims, ok := s.verifyBearer(w, r)
@@ -89,8 +89,8 @@ type rulesFailedRequest struct {
 	IssueNumber int64 `json:"issue_number"` // GitHub's API addresses PRs as issues.
 }
 
-// handlePullRequestRulesFailed answers POST /v1/github/pulls/rules-failed.
-func (s *Server) handlePullRequestRulesFailed(w http.ResponseWriter, r *http.Request) {
+// handleGitHubPullRequestRulesFailed answers POST /v1/github/pulls/rules-failed.
+func (s *Server) handleGitHubPullRequestRulesFailed(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	claims, ok := s.verifyBearer(w, r)
@@ -171,8 +171,8 @@ type openResponse struct {
 	Reason string `json:"reason,omitempty"`
 }
 
-// handlePullRequestOpen answers POST /v1/github/pulls/open: opens a pull request the app auto-closed.
-func (s *Server) handlePullRequestOpen(w http.ResponseWriter, r *http.Request) {
+// handleGitHubPullRequestOpen answers POST /v1/github/pulls/open: opens a pull request the app auto-closed.
+func (s *Server) handleGitHubPullRequestOpen(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	claims, ok := s.verifyBearer(w, r)

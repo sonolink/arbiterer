@@ -36,7 +36,7 @@ const (
 
 	// linkPath is the path the linking flow is served under, and the scope both
 	// cookies are limited to.
-	linkPath = "/link"
+	linkPath = "/v1/link"
 
 	// linkDiscordScopes are the OAuth scopes requested from Discord.
 	linkDiscordScopes = "identify guilds.members.read"
@@ -246,7 +246,7 @@ func (s *Server) writeLinkCookie(w http.ResponseWriter, value string, maxAge int
 	})
 }
 
-// --- GET /link?token=... ---.
+// --- GET /v1/link?token=... ---.
 func (s *Server) handleLink(w http.ResponseWriter, r *http.Request) {
 	encoded := r.URL.Query().Get("token")
 	if encoded == "" {
@@ -289,7 +289,7 @@ func (s *Server) handleLink(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, s.githubClient.AuthorizeURL(state), http.StatusFound)
 }
 
-// --- GET /link/github/callback?code=...&state=... ---.
+// --- GET /v1/link/github/callback?code=...&state=... ---.
 func (s *Server) handleLinkGitHubCallback(w http.ResponseWriter, r *http.Request) {
 	// Single use: expire the cookie now; this request already carries it, and
 	// every path below must consume it, including a missing or invalid state.
@@ -362,7 +362,7 @@ func (s *Server) handleLinkGitHubCallback(w http.ResponseWriter, r *http.Request
 		SkipLinkedComment: lt.SkipLinkedComment,
 	}
 
-	discordPath := url.URL{Path: "/link/discord"}
+	discordPath := url.URL{Path: "/v1/link/discord"}
 	discordStepURL := strings.TrimSuffix(s.cfg.PublicURL, "/") + discordPath.RequestURI()
 	if err := s.syncSetupComment(
 		ctx,
@@ -379,7 +379,7 @@ func (s *Server) handleLinkGitHubCallback(w http.ResponseWriter, r *http.Request
 	s.redirectToDiscord(w, r, lc)
 }
 
-// --- GET /link/discord ---.
+// --- GET /v1/link/discord ---.
 // Resumes a linking attempt at the Discord step, for a contributor who signed
 // in with GitHub in this browser but left before authorizing Discord.
 func (s *Server) handleLinkDiscord(w http.ResponseWriter, r *http.Request) {
@@ -431,7 +431,7 @@ func (s *Server) redirectToDiscord(w http.ResponseWriter, r *http.Request, lc li
 	http.Redirect(w, r, discordURL, http.StatusFound)
 }
 
-// --- GET /link/discord/callback?code=...&state=... ---.
+// --- GET /v1/link/discord/callback?code=...&state=... ---.
 func (s *Server) handleLinkDiscordCallback(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	cookie, err := r.Cookie(linkCookieName)
