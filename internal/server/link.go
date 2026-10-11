@@ -1,6 +1,23 @@
+/*
+Copyright 2026-present SonoLink.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package server
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/subtle"
 	"encoding/base64"
@@ -35,7 +52,7 @@ const (
 
 	// linkPath is the path the linking flow is served under, and the scope both
 	// cookies are limited to.
-	linkPath = "/link"
+	linkPath = "/v1/link"
 
 	// linkDiscordScopes are the OAuth scopes requested from Discord.
 	linkDiscordScopes = "identify guilds.members.read"
@@ -245,7 +262,7 @@ func (s *Server) writeLinkCookie(w http.ResponseWriter, value string, maxAge int
 	})
 }
 
-// --- GET /link?token=... ---.
+// --- GET /v1/link?token=... ---.
 func (s *Server) handleLink(w http.ResponseWriter, r *http.Request) {
 	encoded := r.URL.Query().Get("token")
 	if encoded == "" {
@@ -288,7 +305,7 @@ func (s *Server) handleLink(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, s.githubClient.AuthorizeURL(state), http.StatusFound)
 }
 
-// --- GET /link/github/callback?code=...&state=... ---.
+// --- GET /v1/link/github/callback?code=...&state=... ---.
 func (s *Server) handleLinkGitHubCallback(w http.ResponseWriter, r *http.Request) {
 	// Single use: expire the cookie now; this request already carries it, and
 	// every path below must consume it, including a missing or invalid state.
@@ -361,7 +378,7 @@ func (s *Server) handleLinkGitHubCallback(w http.ResponseWriter, r *http.Request
 		SkipLinkedComment: lt.SkipLinkedComment,
 	}
 
-	discordPath := url.URL{Path: "/link/discord"}
+	discordPath := url.URL{Path: "/v1/link/discord"}
 	discordStepURL := strings.TrimSuffix(s.cfg.PublicURL, "/") + discordPath.RequestURI()
 	if err := s.syncSetupComment(
 		ctx,
@@ -378,7 +395,7 @@ func (s *Server) handleLinkGitHubCallback(w http.ResponseWriter, r *http.Request
 	s.redirectToDiscord(w, r, lc)
 }
 
-// --- GET /link/discord ---.
+// --- GET /v1/link/discord ---.
 // Resumes a linking attempt at the Discord step, for a contributor who signed
 // in with GitHub in this browser but left before authorizing Discord.
 func (s *Server) handleLinkDiscord(w http.ResponseWriter, r *http.Request) {
@@ -430,7 +447,7 @@ func (s *Server) redirectToDiscord(w http.ResponseWriter, r *http.Request, lc li
 	http.Redirect(w, r, discordURL, http.StatusFound)
 }
 
-// --- GET /link/discord/callback?code=...&state=... ---.
+// --- GET /v1/link/discord/callback?code=...&state=... ---.
 func (s *Server) handleLinkDiscordCallback(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	cookie, err := r.Cookie(linkCookieName)
@@ -536,6 +553,106 @@ func (s *Server) handleLinkDiscordCallback(w http.ResponseWriter, r *http.Reques
 		s.logSetupCommentError(err)
 	}
 
-	prUrl := fmt.Sprintf("https://github.com/%s/pull/%d", lc.Repository, lc.IssueNumber)
-	http.Redirect(w, r, prUrl, http.StatusSeeOther)
+	s.openAfterLink(ctx, lc)
+
+	prURL := fmt.Sprintf("https://github.com/%s/pull/%d", lc.Repository, lc.IssueNumber)
+	http.Redirect(w, r, prURL, http.StatusSeeOther)
+}
+
+// openAfterLink opens the pull request the app auto-closed before the author
+// linked, or re-runs the job that reported them unlinked when it stayed open.
+func (s *Server) openAfterLink(ctx context.Context, lc linkCookie) {
+	if lc.Repository == "" || lc.IssueNumber == 0 {
+		return
+	}
+
+	resp, err := s.openIfAutoClosed(ctx, lc.RepositoryID, lc.Repository, lc.IssueNumber)
+	if err != nil {
+		s.logger.Error(
+			"opening auto-closed pull request after account link",
+			"error", err,
+			"repository", lc.Repository,
+			"issue_number", lc.IssueNumber,
+		)
+	} else if resp.Opened {
+		s.logger.Info(
+			"opened pull request after account link",
+			"repository", lc.Repository,
+			"issue_number", lc.IssueNumber,
+		)
+
+		s.clearPendingRerun(ctx, lc)
+
+		return
+	} else if resp.Reason != "" && resp.Reason != reasonNotClosedByApp {
+		s.logger.Debug(
+			"keeping pull request closed after account link",
+			"reason", resp.Reason,
+			"repository", lc.Repository,
+			"issue_number", lc.IssueNumber,
+		)
+	}
+
+	s.rerunAfterLink(ctx, lc)
+}
+
+// rerunAfterLink re-runs the job that posted the linking comment, clearing the
+// stored job whether or not GitHub accepts the re-run.
+func (s *Server) rerunAfterLink(ctx context.Context, lc linkCookie) {
+	jobID, err := s.store.TakeSetupCommentRerunJob(ctx, lc.RepositoryID, lc.IssueNumber)
+	if errors.Is(err, storage.ErrNotFound) {
+		return
+	}
+
+	if err != nil {
+		s.logger.Error(
+			"taking pending rerun",
+			"error", err,
+			"repository", lc.Repository,
+			"issue_number", lc.IssueNumber,
+		)
+
+		return
+	}
+
+	token, err := s.githubClient.CreateInstallationToken(ctx, lc.RepositoryID, lc.Repository)
+	if err != nil {
+		s.logger.Warn(
+			"skipping job rerun: cannot create installation token",
+			"error", err,
+			"repository", lc.Repository,
+			"job_id", jobID,
+		)
+
+		return
+	}
+
+	if err := s.githubClient.RerunJob(ctx, token, lc.Repository, jobID); err != nil {
+		s.logger.Warn(
+			"skipping job rerun: GitHub rejected the request",
+			"error", err,
+			"repository", lc.Repository,
+			"job_id", jobID,
+		)
+
+		return
+	}
+
+	s.logger.Info(
+		"rerunning job after account link",
+		"repository", lc.Repository,
+		"job_id", jobID,
+	)
+}
+
+// clearPendingRerun clears any job stored for the pull request.
+func (s *Server) clearPendingRerun(ctx context.Context, lc linkCookie) {
+	if err := s.store.ClearSetupCommentRerunJob(ctx, lc.RepositoryID, lc.IssueNumber); err != nil {
+		s.logger.Error(
+			"clearing pending rerun",
+			"error", err,
+			"repository", lc.Repository,
+			"issue_number", lc.IssueNumber,
+		)
+	}
 }

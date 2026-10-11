@@ -1,3 +1,19 @@
+/*
+Copyright 2026-present SonoLink.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package github
 
 import (
@@ -39,6 +55,8 @@ type Claims struct {
 	RepositoryID      int64
 	RepositoryOwnerID int64
 	Repository        string
+	RunID             int64
+	CheckRunID        int64
 }
 
 // tokenClaims mirrors the claims GitHub Actions puts in an OIDC token. Numeric ids
@@ -47,6 +65,8 @@ type tokenClaims struct {
 	RepositoryID      string `json:"repository_id"`
 	RepositoryOwnerID string `json:"repository_owner_id"`
 	Repository        string `json:"repository"`
+	RunID             string `json:"run_id"`
+	CheckRunID        string `json:"check_run_id"`
 }
 
 func (tc tokenClaims) claims() (*Claims, error) {
@@ -64,10 +84,22 @@ func (tc tokenClaims) claims() (*Claims, error) {
 		return nil, fmt.Errorf("github: token missing repository claim")
 	}
 
+	runID, err := strconv.ParseInt(tc.RunID, 10, 64)
+	if err != nil && tc.RunID != "" {
+		return nil, fmt.Errorf("github: parsing run id %q: %w", tc.RunID, err)
+	}
+
+	checkRunID, err := strconv.ParseInt(tc.CheckRunID, 10, 64)
+	if err != nil && tc.CheckRunID != "" {
+		return nil, fmt.Errorf("github: parsing check run id %q: %w", tc.CheckRunID, err)
+	}
+
 	return &Claims{
 		RepositoryID:      repositoryID,
 		RepositoryOwnerID: ownerID,
 		Repository:        tc.Repository,
+		RunID:             runID,
+		CheckRunID:        checkRunID,
 	}, nil
 }
 
