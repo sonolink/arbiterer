@@ -53,7 +53,7 @@ type tokenResponse struct {
 func (c *Client) Exchange(ctx context.Context, code string) (string, error) {
 	form := url.Values{
 		"client_id":     {c.cfg.ClientID},
-		"client_secret": {c.cfg.ClientSecret},
+		"client_secret": {string(c.cfg.ClientSecret)},
 		"code":          {code},
 		"redirect_uri":  {c.cfg.RedirectURI},
 	}

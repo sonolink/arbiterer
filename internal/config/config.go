@@ -19,6 +19,7 @@ package config
 import (
 	"bytes"
 	"crypto/rsa"
+	"encoding"
 	"encoding/base64"
 	"fmt"
 	"io"
@@ -42,14 +43,42 @@ type Config struct {
 	GitHub   GitHub
 }
 
-// Load reads the full configuration from environment variables.
+// Load reads the full configuration from environment variables and Docker
+// secret files.
 func Load() (Config, error) {
 	cfg, err := env.ParseAs[Config]()
 	if err != nil {
 		return Config{}, fmt.Errorf("config: %w", err)
 	}
 
+	if err := cfg.loadSecrets(); err != nil {
+		return Config{}, err
+	}
+
 	return cfg, nil
+}
+
+// loadSecrets fills the fields provided as Docker secrets.
+func (c *Config) loadSecrets() error {
+	secrets := []struct {
+		name string
+		dst  encoding.TextUnmarshaler
+	}{
+		{"POSTGRES_PASSWORD", &c.Postgres.Password},
+		{"DISCORD_CLIENT_SECRET", &c.Discord.ClientSecret},
+		{"GITHUB_CLIENT_SECRET", &c.GitHub.ClientSecret},
+		{"GITHUB_CLIENT_PRIVATE_KEY", &c.GitHub.PrivateKey},
+		{"STORAGE_ENCRYPTION_KEY", &c.Secrets.StorageKey},
+		{"BROWSER_ENCRYPTION_KEY", &c.Secrets.BrowserKey},
+	}
+
+	for _, s := range secrets {
+		if err := decodeSecret(s.name, s.dst); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // LogFormat is the format used for log output.
@@ -111,14 +140,14 @@ func LoadLog() (Log, error) {
 // Discord holds application settings used for OAuth.
 type Discord struct {
 	ClientID     string `env:"DISCORD_CLIENT_ID,required"`
-	ClientSecret string `env:"DISCORD_CLIENT_SECRET,required"`
+	ClientSecret Secret `env:"-"`
 	RedirectURI  string `env:"DISCORD_REDIRECT_URI,required"`
 }
 
 // Postgres holds the configuration to connect to the postgres database.
 type Postgres struct {
 	User     string `env:"POSTGRES_USER,required"`
-	Password string `env:"POSTGRES_PASSWORD,required"`
+	Password Secret `env:"-"`
 	Host     string `env:"POSTGRES_HOST,required"`
 	Port     string `env:"POSTGRES_PORT" envDefault:"5432"`
 	Name     string `env:"POSTGRES_DB,required"`
@@ -129,7 +158,7 @@ type Postgres struct {
 func (p Postgres) DSN() string {
 	u := url.URL{
 		Scheme:   "postgres",
-		User:     url.UserPassword(p.User, p.Password),
+		User:     url.UserPassword(p.User, string(p.Password)),
 		Host:     net.JoinHostPort(p.Host, p.Port),
 		Path:     "/" + p.Name,
 		RawQuery: url.Values{"sslmode": {p.SSLMode}}.Encode(),
@@ -162,13 +191,17 @@ func LoadPostgres() (Postgres, error) {
 		return Postgres{}, fmt.Errorf("config: %w", err)
 	}
 
+	if err := decodeSecret("POSTGRES_PASSWORD", &cfg.Password); err != nil {
+		return Postgres{}, err
+	}
+
 	return cfg, nil
 }
 
 // keySize is the required length in bytes of a Key.
 const keySize = 32
 
-// Key is a 32 byte secret, decoded from a base64 encoded environment value.
+// Key is a 32 byte secret, decoded from a base64 encoded value.
 type Key []byte
 
 // UnmarshalText decodes a base64 encoded key and rejects it unless it is keySize bytes long.
@@ -189,21 +222,21 @@ func (k *Key) UnmarshalText(text []byte) error {
 
 // Secrets holds the keys used to encrypt sensitive values.
 type Secrets struct {
-	StorageKey Key `env:"STORAGE_ENCRYPTION_KEY,required"`
-	BrowserKey Key `env:"BROWSER_ENCRYPTION_KEY,required"`
+	StorageKey Key `env:"-"`
+	BrowserKey Key `env:"-"`
 }
 
 // GitHub holds the application settings used for OAuth and OIDC.
 type GitHub struct {
 	ClientID     string        `env:"GITHUB_CLIENT_ID,required"`
-	ClientSecret string        `env:"GITHUB_CLIENT_SECRET,required"`
-	PrivateKey   RSAPrivateKey `env:"GITHUB_CLIENT_PRIVATE_KEY,required"`
+	ClientSecret Secret        `env:"-"`
+	PrivateKey   RSAPrivateKey `env:"-"`
 	RedirectURI  string        `env:"GITHUB_REDIRECT_URI,required"`
 	OIDCAudience string        `env:"GITHUB_OIDC_AUDIENCE,required"`
 }
 
 // RSAPrivateKey is a GitHub App's RSA private key, decoded from a PEM encoded
-// environment value, optionally base64 encoded to keep it on a single line.
+// value, optionally base64 encoded to keep it on a single line.
 type RSAPrivateKey rsa.PrivateKey
 
 // UnmarshalText parses a PEM encoded RSA private key, base64 decoding it

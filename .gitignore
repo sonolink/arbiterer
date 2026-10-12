@@ -25,6 +25,10 @@ go.work.sum
 # env file
 .env
 
+# Secret files (keep the *.example.txt templates)
+secrets/*
+!secrets/*.example.txt
+
 # Editor/IDE
 .idea/
 .vscode/

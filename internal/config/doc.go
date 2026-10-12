@@ -14,5 +14,6 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package config reads application configuration from environment variables.
+// Package config reads application configuration from environment variables and
+// Docker secret files.
 package config
