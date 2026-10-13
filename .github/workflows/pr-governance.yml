@@ -11,7 +11,7 @@ concurrency:
   
 jobs:
   semantic-title:
-    name: Check Semantic Title
+    name: Semantic title
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -24,7 +24,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   template-validation:
-    name: Validate PR Template
+    name: PR template
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -46,7 +46,7 @@ jobs:
             await script({ github, context, core });
 
   apply-labels:
-    name: Apply labels
+    name: Labels
     runs-on: ubuntu-latest
     needs: [template-validation]
     timeout-minutes: 15

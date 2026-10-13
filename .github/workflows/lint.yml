@@ -13,7 +13,7 @@ concurrency:
 
 jobs:
   format:
-    name: Format check (gofmt + goimports)
+    name: Format (gofmt + goimports)
     permissions:
       contents: read
     runs-on: ubuntu-latest
@@ -49,7 +49,7 @@ jobs:
           fi
 
   lint-check:
-    name: Lint check with golangci-lint
+    name: Lint (golangci-lint)
     permissions:
       contents: read
     runs-on: ubuntu-latest
@@ -73,7 +73,7 @@ jobs:
         uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9
 
   build:
-    name: Build
+    name: Build (go build)
     permissions:
       contents: read
     runs-on: ubuntu-latest
@@ -100,7 +100,7 @@ jobs:
         run: go build ./...
 
   migration-validation:
-    name: Validate migrations
+    name: Migrations (goose validate)
     permissions:
       contents: read
     runs-on: ubuntu-latest
