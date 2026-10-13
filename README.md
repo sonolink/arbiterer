@@ -5,8 +5,8 @@
 A GitHub Action that lets your Discord community decide whose contributions get through.
 
 [![License](https://img.shields.io/github/license/sonolink/arbiterer)](LICENSE)
-[![Discord](https://img.shields.io/discord/1471146455002775624?label=discord)](https://discord.gg/tPHVWBPedt)
 [![CI](https://github.com/sonolink/arbiterer/actions/workflows/lint.yml/badge.svg?branch=main)](https://github.com/sonolink/arbiterer/actions/workflows/lint.yml)
+[![Discord](https://img.shields.io/discord/1471146455002775624?label=discord)](https://discord.gg/tPHVWBPedt)
 
 </div>
 
@@ -54,6 +54,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: sonolink/arbiterer@v1
+        with:
+          # Exempt the repository owner, organization members and collaborators.
+          exempt-associations: OWNER,MEMBER,COLLABORATOR
 ```
 
 That's all you need if authors only have to link their accounts. To enforce conditions on the linked Discord account, add [rules](#rules).
@@ -64,11 +67,12 @@ That's all you need if authors only have to link their accounts. To enforce cond
 
 All inputs are optional.
 
-| Input               | Description                                                                                                                                                                                                                       | Default |
-| ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- |
-| `rules`             | JavaScript that decides whether the author passes. See [Rules](#rules). Leave empty to only require a linked Discord account.                                                                                                     | `""`    |
-| `close-on-failure`  | Close the pull request when the author has not linked their accounts or fails the rules, and open it again once they pass. Needs `pull-requests: write` in the workflow's `permissions` and `reopened` in the workflow's `types`. | `false` |
-| `comment-on-linked` | Post a comment on the pull request confirming the author is already linked. Set to `false` to only comment when the author still has to act. A comment that earlier asked them to act is always updated.                          | `true`  |
+| Input                 | Description                                                                                                                                                                                                                       | Default |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- |
+| `rules`               | JavaScript that decides whether the author passes. See [Rules](#rules). Leave empty to only require a linked Discord account.                                                                                                     | `""`    |
+| `close-on-failure`    | Close the pull request when the author has not linked their accounts or fails the rules, and open it again once they pass. Needs `pull-requests: write` in the workflow's `permissions` and `reopened` in the workflow's `types`. | `false` |
+| `comment-on-linked`   | Post a comment on the pull request confirming the author is already linked. Set to `false` to only comment when the author still has to act. A comment that earlier asked them to act is always updated.                          | `true`  |
+| `exempt-associations` | Comma-separated [GitHub author associations](https://docs.github.com/en/graphql/reference/issues#enum-commentauthorassociation) to skip verification for. Exempt authors need no linked Discord account and skip the rules.       | `""`    |
 
 ### Rules
 
