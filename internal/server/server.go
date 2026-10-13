@@ -1,3 +1,19 @@
+/*
+Copyright 2026-present SonoLink.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package server
 
 import (
@@ -52,13 +68,16 @@ func New(
 }
 
 func (s *Server) addRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("GET /healthz", s.handleHealth)
-	mux.HandleFunc("POST /v1/discord/resolve", s.handleResolve)
-	mux.HandleFunc("POST /v1/discord/member", s.handleMember)
-	mux.HandleFunc("GET /link", s.handleLink)
-	mux.HandleFunc("GET /link/github/callback", s.handleLinkGitHubCallback)
-	mux.HandleFunc("GET /link/discord", s.handleLinkDiscord)
-	mux.HandleFunc("GET /link/discord/callback", s.handleLinkDiscordCallback)
+	mux.HandleFunc("GET /v1/healthz", s.handleHealth)
+	mux.HandleFunc("POST /v1/discord/resolve", s.handleDiscordResolve)
+	mux.HandleFunc("POST /v1/discord/member", s.handleDiscordMember)
+	mux.HandleFunc("POST /v1/github/pulls/close", s.handleGitHubPullRequestClose)
+	mux.HandleFunc("POST /v1/github/pulls/rules-failed", s.handleGitHubPullRequestRulesFailed)
+	mux.HandleFunc("POST /v1/github/pulls/open", s.handleGitHubPullRequestOpen)
+	mux.HandleFunc("GET /v1/link", s.handleLink)
+	mux.HandleFunc("GET /v1/link/github/callback", s.handleLinkGitHubCallback)
+	mux.HandleFunc("GET /v1/link/discord", s.handleLinkDiscord)
+	mux.HandleFunc("GET /v1/link/discord/callback", s.handleLinkDiscordCallback)
 }
 
 // Run starts the HTTP server and blocks until it stops, draining in-flight

@@ -1,3 +1,19 @@
+/*
+Copyright 2026-present SonoLink.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package server
 
 import (
@@ -25,31 +41,32 @@ const (
 	// has not yet authorized Discord. It is never served by resolve.
 	commentGitHubVerified commentStatus = "github_verified"
 
-	commentUnlinked commentStatus = "unlinked"
-	commentLinked   commentStatus = "linked"
-	commentRevoked  commentStatus = "revoked"
+	commentUnlinked    commentStatus = "unlinked"
+	commentLinked      commentStatus = "linked"
+	commentRevoked     commentStatus = "revoked"
+	commentRulesFailed commentStatus = "rules_failed"
 )
 
 // setupSteps lists the steps a contributor must complete and links the next open step to linkURL.
 func setupSteps(status commentStatus, linkURL string) []setupStep {
-	signInGitHub := setupStep{text: "Sign in with GitHub"}
-	signInDiscord := setupStep{text: "Sign in with Discord"}
+	authorizeGitHub := setupStep{text: "Authorize GitHub"}
+	authorizeDiscord := setupStep{text: "Authorize Discord"}
 
 	switch status {
 	case commentLinked:
 		// Nothing left to do; the comment confirms the link or clears an earlier ask.
-		signInGitHub.done = true
-		signInDiscord.done = true
+		authorizeGitHub.done = true
+		authorizeDiscord.done = true
 	case commentGitHubVerified:
 		// Resumes at the Discord step via the cookie set in the GitHub callback.
-		signInGitHub.done = true
-		signInDiscord.text = fmt.Sprintf("[%s](%s)", signInDiscord.text, linkURL)
+		authorizeGitHub.done = true
+		authorizeDiscord.text = fmt.Sprintf("[%s](%s)", authorizeDiscord.text, linkURL)
 	default:
 		// commentUnlinked, commentRevoked, and anything new start at GitHub.
-		signInGitHub.text = fmt.Sprintf("[%s](%s)", signInGitHub.text, linkURL)
+		authorizeGitHub.text = fmt.Sprintf("[%s](%s)", authorizeGitHub.text, linkURL)
 	}
 
-	return []setupStep{signInGitHub, signInDiscord}
+	return []setupStep{authorizeGitHub, authorizeDiscord}
 }
 
 // formatCommentBody renders the setup comment for a contributor in the given
@@ -64,13 +81,35 @@ func formatCommentBody(author string, status commentStatus, linkURL string) stri
 		b.WriteString("your GitHub and Discord accounts are linked.")
 	case commentRevoked:
 		b.WriteString("your Discord link has expired or was revoked. Please follow these steps to link it again:")
+	case commentRulesFailed:
+		b.WriteString("you didn't satisfy the pre-defined rules.")
+
+		if linkURL != "" {
+			fmt.Fprintf(&b, " [See more here](%s).", linkURL)
+		}
+
+		return b.String()
 	default:
 		b.WriteString("please follow these steps to continue:")
 	}
 
+	steps := setupSteps(status, linkURL)
+
+	remaining := false
+	for _, step := range steps {
+		if !step.done {
+			remaining = true
+			break
+		}
+	}
+
+	if !remaining {
+		return b.String()
+	}
+
 	b.WriteString("\n")
 
-	for i, step := range setupSteps(status, linkURL) {
+	for i, step := range steps {
 		text := step.text
 		if step.done {
 			text = "~~" + text + "~~"
