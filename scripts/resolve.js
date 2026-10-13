@@ -1,6 +1,6 @@
 const evaluateRules = require("./rules");
 const createMemberHelper = require("./member");
-const { closePullRequest, openPullRequest } = require("./pull-requests");
+const { closePullRequest, openPullRequest } = require("./pull-request");
 const post = require("./api");
 const commentOnLinked = process.env.ARBITERER_COMMENT_ON_LINKED?.trim().toLowerCase() !== "false";
 const closeOnFailure = process.env.ARBITERER_CLOSE_ON_FAILURE?.trim().toLowerCase() !== "false";
