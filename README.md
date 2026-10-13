@@ -6,7 +6,7 @@ A GitHub Action that lets your Discord community decide whose contributions get 
 
 [![License](https://img.shields.io/github/license/sonolink/arbiterer)](LICENSE)
 [![Discord](https://img.shields.io/discord/1471146455002775624?label=discord)](https://discord.gg/tPHVWBPedt)
-<!--[![CI](https://github.com/sonolink/arbiterer/actions/workflows/ci.yml/badge.svg)](https://github.com/sonolink/arbiterer/actions/workflows/ci.yml)-->
+[![CI](https://github.com/sonolink/arbiterer/actions/workflows/lint.yml/badge.svg?branch=main)](https://github.com/sonolink/arbiterer/actions/workflows/lint.yml)
 
 </div>
 
@@ -45,9 +45,9 @@ on:
     types: [opened, synchronize, reopened]
 
 permissions:
-  contents: read
-  pull-requests: write
-  id-token: write
+  contents: read # Lets Arbiterer read the repository metadata
+  pull-requests: write # Needed to open/close the PR (when close-on-failure is true)
+  id-token: write # Lets Arbiterer verify which repository the request comes from (OIDC token)
 
 jobs:
   arbiterer:
@@ -64,15 +64,15 @@ That's all you need if authors only have to link their accounts. To enforce cond
 
 All inputs are optional.
 
-| Input               | Description                                                                                                                                                                                                                           | Default |
-| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- |
-| `rules`             | JavaScript that decides whether the author passes. See [Rules](#rules). Leave empty to only require a linked Discord account.                                                                                                         | `""`    |
-| `close-on-failure`  | Close the pull request when the author has not linked their accounts or fails the rules, and open it again once they pass. Needs the `pull_requests: write` permission on the Arbiterer app and `reopened` in the workflow's `types`. | `false` |
-| `comment-on-linked` | Post a comment on the pull request confirming the author is already linked. Set to `false` to only comment when the author still has to act. A comment that earlier asked them to act is always updated.                              | `true`  |
+| Input               | Description                                                                                                                                                                                                                       | Default |
+| ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- |
+| `rules`             | JavaScript that decides whether the author passes. See [Rules](#rules). Leave empty to only require a linked Discord account.                                                                                                     | `""`    |
+| `close-on-failure`  | Close the pull request when the author has not linked their accounts or fails the rules, and open it again once they pass. Needs `pull-requests: write` in the workflow's `permissions` and `reopened` in the workflow's `types`. | `false` |
+| `comment-on-linked` | Post a comment on the pull request confirming the author is already linked. Set to `false` to only comment when the author still has to act. A comment that earlier asked them to act is always updated.                          | `true`  |
 
 ### Rules
 
-The `rules` input is a JavaScript snippet run once per pull request. It has access to:
+The `rules` input is a JavaScript snippet evaluated on every workflow execution. It has access to:
 
 | Name                     | Description                                                                                                                                                         |
 | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
