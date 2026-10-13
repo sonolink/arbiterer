@@ -68,7 +68,7 @@ module.exports = async function resolve({ core, context, github }) {
   const association = data.author_association;
   if (association && exempt.has(association)) {
     core.info(`Skipping verification: @${user.login} has author association ${association}, which is exempt from ` + "linking accounts and from the rules.");
-    core.setOutput("status", "skipped");
+    core.setOutput("status", "exempt");
     core.setOutput("link-url", "");
     core.setOutput("user", "");
 
