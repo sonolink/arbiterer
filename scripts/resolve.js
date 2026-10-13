@@ -1,10 +1,40 @@
 const evaluateRules = require("./rules");
 const createMemberHelper = require("./member");
-const { closePullRequest } = require("./pull-requests");
+const { closePullRequest, openPullRequest } = require("./pull-requests");
 const post = require("./api");
 const commentOnLinked = process.env.ARBITERER_COMMENT_ON_LINKED?.trim().toLowerCase() !== "false";
 const closeOnFailure = process.env.ARBITERER_CLOSE_ON_FAILURE?.trim().toLowerCase() !== "false";
+const exemptAssociationsSource = process.env.ARBITERER_EXEMPT_ASSOCIATIONS ?? "";
 const rulesSource = process.env.ARBITERER_RULES?.trim() || "";
+
+// GitHub's author_association values.
+// https://docs.github.com/en/graphql/reference/issues#enum-commentauthorassociation
+const knownAssociations = new Set(["OWNER", "MEMBER", "COLLABORATOR", "CONTRIBUTOR", "FIRST_TIME_CONTRIBUTOR", "FIRST_TIMER", "MANNEQUIN", "NONE"]);
+
+/**
+ * Parses the exempt associations, warning about values GitHub does not use.
+ * @param {typeof import('@actions/core')} core
+ * @returns {Set<string>}
+ */
+function exemptAssociations(core) {
+  const associations = new Set();
+
+  for (const entry of exemptAssociationsSource.split(",")) {
+    const association = entry.trim().toUpperCase();
+    if (!association) {
+      continue;
+    }
+
+    if (!knownAssociations.has(association)) {
+      core.warning(`Ignoring unknown exempt-associations value "${entry.trim()}".`, { title: "Invalid exempt-associations" });
+      continue;
+    }
+
+    associations.add(association);
+  }
+
+  return associations;
+}
 
 /**
  * @param {Object} options
@@ -14,6 +44,8 @@ const rulesSource = process.env.ARBITERER_RULES?.trim() || "";
  * @returns {Promise<void>}
  */
 module.exports = async function resolve({ core, context, github }) {
+  const exempt = exemptAssociations(core);
+
   if (context.eventName !== "pull_request" && context.eventName !== "pull_request_target") {
     core.info(`Skipping: event "${context.eventName}" is not a pull request.`);
     return;
@@ -30,6 +62,20 @@ module.exports = async function resolve({ core, context, github }) {
   }
   if (user.login === "ghost" || user.type !== "User") {
     core.info(`Skipping: pull request author is not a valid GitHub user (login: ${user.login}, type: ${user.type}).`);
+    return;
+  }
+
+  const association = data.author_association;
+  if (association && exempt.has(association)) {
+    core.info(`Skipping verification: @${user.login} has author association ${association}, which is exempt from ` + "linking accounts and from the rules.");
+    core.setOutput("status", "skipped");
+    core.setOutput("link-url", "");
+    core.setOutput("user", "");
+
+    if (closeOnFailure && data.state === "closed") {
+      await openPullRequest({ core, context, reason: "the author is exempt from verification" });
+    }
+
     return;
   }
 

@@ -52,9 +52,10 @@ async function closePullRequest({ core, context, reason, rulesFailed = false }) 
  * @param {Object} options
  * @param {typeof import('@actions/core')} options.core
  * @param {typeof import('@actions/github').context} options.context
+ * @param {string} [options.reason]
  * @returns {Promise<void>}
  */
-async function openPullRequest({ core, context }) {
+async function openPullRequest({ core, context, reason = "the author is linked and the rules are satisfied" }) {
   const pullNumber = context.payload.pull_request?.number;
 
   if (!pullNumber) {
@@ -71,12 +72,12 @@ async function openPullRequest({ core, context }) {
   }
 
   if (res?.opened) {
-    core.info(`Opened pull request #${pullNumber} because the author is linked and the rules are satisfied.`);
+    core.info(`Opened pull request #${pullNumber} because ${reason}.`);
     return;
   }
 
-  const reason = res?.reason ? `: ${res.reason}` : "";
-  core.info(`Not opening pull request #${pullNumber}${reason}.`);
+  const detail = res?.reason ? `: ${res.reason}` : "";
+  core.info(`Not opening pull request #${pullNumber}${detail}.`);
 }
 
 /**

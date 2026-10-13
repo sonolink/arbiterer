@@ -14,6 +14,13 @@ inputs:
       while the author still needs to link. An earlier request to link is always updated once they do.
     required: false
     default: "true"
+  exempt-associations:
+    description: Comma-separated GitHub author associations to skip verification for, e.g.
+      `OWNER,COLLABORATOR`. Exempt authors need no linked account and skip the rules. Valid values are
+      `OWNER`, `MEMBER`, `COLLABORATOR`, `CONTRIBUTOR`, `FIRST_TIME_CONTRIBUTOR`, `FIRST_TIMER`, `MANNEQUIN`
+      and `NONE`. Empty verifies everyone.
+    required: false
+    default: ""
   rules:
     description: >-
       Optional JavaScript that decides whether the author passes. It can read `user` (their linked Discord
@@ -24,7 +31,7 @@ inputs:
 
 outputs:
   status:
-    description: Link status of the pull request author (`unlinked`, `linked` or `revoked`).
+    description: Link status of the pull request author (`unlinked`, `linked`, `revoked` or `skipped` when exempt).
     value: ${{ steps.request.outputs.status }}
   link-url:
     description: URL where the author can link or re-link their accounts. Empty when already linked.
@@ -42,6 +49,7 @@ runs:
         ARBITERER_ACTION_PATH: ${{ github.action_path }}
         ARBITERER_CLOSE_ON_FAILURE: ${{ inputs.close-on-failure }}
         ARBITERER_COMMENT_ON_LINKED: ${{ inputs.comment-on-linked }}
+        ARBITERER_EXEMPT_ASSOCIATIONS: ${{ inputs.exempt-associations }}
         ARBITERER_RULES: ${{ inputs.rules }}
       with:
         script: |
