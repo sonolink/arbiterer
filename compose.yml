@@ -1,0 +1,90 @@
+name: arbiterer
+
+x-app: &app
+  image: golang:1.27.2-alpine
+  env_file:
+    - ./.env
+  volumes:
+    - ./:/workspace:cached
+    - go-mod-cache:/go/pkg/mod
+  working_dir: /workspace
+
+x-app-env: &app-env
+  POSTGRES_HOST: postgres
+  POSTGRES_PORT: "5432"
+  SERVER_HOST: 0.0.0.0
+  SERVER_PORT: "8080"
+
+services:
+  server:
+    <<: *app
+    command: ["go", "run", "./cmd/arbiterer", "serve"]
+    environment:
+      <<: *app-env
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+      DISCORD_CLIENT_SECRET_FILE: /run/secrets/discord_client_secret
+      GITHUB_CLIENT_SECRET_FILE: /run/secrets/github_client_secret
+      GITHUB_CLIENT_PRIVATE_KEY_FILE: /run/secrets/github_client_private_key
+      STORAGE_ENCRYPTION_KEY_FILE: /run/secrets/storage_encryption_key
+      BROWSER_ENCRYPTION_KEY_FILE: /run/secrets/browser_encryption_key
+    secrets:
+      - postgres_password
+      - discord_client_secret
+      - github_client_secret
+      - github_client_private_key
+      - storage_encryption_key
+      - browser_encryption_key
+    ports:
+      - "127.0.0.1:${SERVER_PORT}:8080"
+    depends_on:
+      migrator:
+        condition: service_completed_successfully
+
+  migrator:
+    <<: *app
+    command: ["go", "run", "./cmd/arbiterer", "migrate"]
+    environment:
+      <<: *app-env
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+    secrets:
+      - postgres_password
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:18.6-alpine
+    restart: unless-stopped
+    env_file:
+      - ./.env
+    environment:
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+    secrets:
+      - postgres_password
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - pg-data:/var/lib/postgresql
+
+secrets:
+  postgres_password:
+    file: ${SECRETS_DIR:-./secrets}/postgres_password.txt
+  discord_client_secret:
+    file: ${SECRETS_DIR:-./secrets}/discord_client_secret.txt
+  github_client_secret:
+    file: ${SECRETS_DIR:-./secrets}/github_client_secret.txt
+  github_client_private_key:
+    file: ${SECRETS_DIR:-./secrets}/github_client_private_key.txt
+  storage_encryption_key:
+    file: ${SECRETS_DIR:-./secrets}/storage_encryption_key.txt
+  browser_encryption_key:
+    file: ${SECRETS_DIR:-./secrets}/browser_encryption_key.txt
+
+volumes:
+  go-mod-cache:
+  pg-data:

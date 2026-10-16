@@ -115,7 +115,7 @@ func (c *Client) requestToken(ctx context.Context, form url.Values) (*Token, err
 	}
 
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.SetBasicAuth(c.cfg.ClientID, c.cfg.ClientSecret)
+	req.SetBasicAuth(c.cfg.ClientID, string(c.cfg.ClientSecret))
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
