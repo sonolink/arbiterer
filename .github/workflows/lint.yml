@@ -2,29 +2,30 @@ name: Lint and build
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
   pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
+    types: [opened, synchronize, reopened]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   format:
     name: Format (gofmt + goimports)
+    permissions:
+      contents: read
     runs-on: ubuntu-latest
     timeout-minutes: 15
     if: |
-      (github.event.pull_request.head.repo.full_name == github.repository &&
-      format('{0}', github.event.pull_request.user.id) != vars.RENOVATE_BOT_ID)
-    permissions:
-      contents: write
+      github.event_name != 'pull_request' ||
+      format('{0}', github.event.pull_request.user.id) != vars.RENOVATE_BOT_ID
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          ref: ${{ github.head_ref }}
+          persist-credentials: false
 
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
@@ -33,36 +34,28 @@ jobs:
           cache: true
 
       - name: Install goimports
-        run: go install golang.org/x/tools/cmd/goimports@latest
+        run: go install golang.org/x/tools/cmd/goimports@16517d951552611e7bd358c48ee1051fd0e57b0c # v0.52.0
 
-      - name: Run gofmt
-        run: gofmt -l -w .
-
-      - name: Run goimports
-        run: goimports -l -w .
-
-      - name: Commit and push changes
+      - name: Check formatting
         run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git add -A
+          gofmt_out=$(gofmt -l .)
+          goimports_out=$(goimports -l .)
 
-          if ! git diff --cached --quiet; then
-            git commit -m "format(gofmt) [ci skip]"
-            git show HEAD
-            git push
-          else
-            echo "No changes required"
+          if [ -n "$gofmt_out" ] || [ -n "$goimports_out" ]; then
+            echo "These files are not formatted:"
+            [ -n "$gofmt_out" ] && echo "$gofmt_out" | sed 's/$/ [gofmt]/'
+            [ -n "$goimports_out" ] && echo "$goimports_out" | sed 's/$/ [goimports]/'
+            exit 1
           fi
 
   lint-check:
-    name: Lint check with golangci-lint
+    name: Lint (golangci-lint)
     permissions:
       contents: read
     runs-on: ubuntu-latest
     timeout-minutes: 15
     if: |
-      github.event_name == 'pull_request' &&
+      github.event_name != 'pull_request' ||
       format('{0}', github.event.pull_request.user.id) != vars.RENOVATE_BOT_ID
     steps:
       - name: Checkout
@@ -80,12 +73,14 @@ jobs:
         uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9
 
   build:
-    name: Build
+    name: Build (go build)
     permissions:
       contents: read
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    if: format('{0}', github.event.pull_request.user.id) != vars.RENOVATE_BOT_ID
+    if: |
+      github.event_name != 'pull_request' ||
+      format('{0}', github.event.pull_request.user.id) != vars.RENOVATE_BOT_ID
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -105,12 +100,14 @@ jobs:
         run: go build ./...
 
   migration-validation:
-    name: Validate migrations
+    name: Migrations (goose validate)
     permissions:
       contents: read
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    if: format('{0}', github.event.pull_request.user.id) != vars.RENOVATE_BOT_ID
+    if: |
+      github.event_name != 'pull_request' ||
+      format('{0}', github.event.pull_request.user.id) != vars.RENOVATE_BOT_ID
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
