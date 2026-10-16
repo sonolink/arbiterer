@@ -1,0 +1,106 @@
+name: Release
+
+on:
+  push:
+    tags: ["v[0-9]+.[0-9]+.[0-9]+"]
+
+permissions: {}
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    name: Prepare
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      latest: ${{ steps.version.outputs.latest }}
+      latest_in_major: ${{ steps.version.outputs.latest_in_major }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Check branch
+        run: |
+          if ! git merge-base --is-ancestor HEAD origin/main; then
+            echo "::error::$GITHUB_REF_NAME does not point at a commit on main"
+            exit 1
+          fi
+
+      - name: Get version
+        id: version
+        run: |
+          releases=$(git tag --list | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V)
+          major=${GITHUB_REF_NAME%%.*}
+          is() { [ "$GITHUB_REF_NAME" = "$1" ] && echo true || echo false; }
+          echo "latest=$(is "$(echo "$releases" | tail -n 1)")" >> "$GITHUB_OUTPUT"
+          echo "latest_in_major=$(is "$(echo "$releases" | grep "^$major\." | tail -n 1)")" >> "$GITHUB_OUTPUT"
+
+      - name: Check changelog
+        run: sh .github/scripts/release-notes.sh "${GITHUB_REF_NAME#v}"
+
+  ci:
+    name: CI
+    needs: [prepare]
+    permissions:
+      contents: read
+    uses: ./.github/workflows/lint.yml
+
+  image:
+    name: Image
+    needs: [prepare, ci]
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/build-image.yml
+    with:
+      tags: |
+        type=semver,pattern={{version}}
+        type=semver,pattern={{major}}.{{minor}}
+        type=semver,pattern={{major}},enable=${{ needs.prepare.outputs.latest_in_major }}
+        type=raw,value=latest,enable=${{ needs.prepare.outputs.latest }}
+        type=sha,format=long
+
+  deploy:
+    name: Deploy
+    needs: [image]
+    permissions:
+      contents: read
+      packages: read
+    uses: ./.github/workflows/deploy.yml
+    secrets: inherit
+    with:
+      environment: production
+      image: ${{ needs.image.outputs.image }}
+
+  publish:
+    name: Publish
+    needs: [prepare, deploy]
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          LATEST: ${{ needs.prepare.outputs.latest }}
+        run: |
+          sh .github/scripts/release-notes.sh "${GITHUB_REF_NAME#v}" > notes.md
+          gh release create "$GITHUB_REF_NAME" --verify-tag --title "$GITHUB_REF_NAME" --notes-file notes.md --latest="$LATEST"
+
+      - name: Move tag
+        if: needs.prepare.outputs.latest_in_major == 'true'
+        run: |
+          git tag --force "${GITHUB_REF_NAME%%.*}"
+          git push --force origin "${GITHUB_REF_NAME%%.*}"
