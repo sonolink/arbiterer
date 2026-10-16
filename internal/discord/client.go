@@ -31,7 +31,6 @@ const maxResponseBytes = 1 << 20
 // Client talks to the Discord API using the given application credentials.
 type Client struct {
 	cfg        config.Discord
-	baseURL    string
 	httpClient *http.Client
 }
 
@@ -39,7 +38,6 @@ type Client struct {
 func NewClient(cfg config.Discord) *Client {
 	return &Client{
 		cfg:        cfg,
-		baseURL:    "https://discord.com/api/v10",
 		httpClient: &http.Client{Timeout: 10 * time.Second},
 	}
 }
@@ -50,7 +48,7 @@ func (c *Client) newRequest(
 	path string,
 	body io.Reader,
 ) (*http.Request, error) {
-	req, err := http.NewRequestWithContext(ctx, method, c.baseURL+path, body)
+	req, err := http.NewRequestWithContext(ctx, method, c.cfg.APIURL+path, body)
 	if err != nil {
 		return nil, err
 	}

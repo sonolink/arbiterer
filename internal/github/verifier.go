@@ -25,10 +25,8 @@ import (
 	"github.com/sonolink/arbiterer/internal/config"
 )
 
-const (
-	issuerURL = "https://token.actions.githubusercontent.com"
-	jwksURL   = issuerURL + "/.well-known/jwks"
-)
+// jwksPath is where an issuer publishes the keys its tokens are signed with.
+const jwksPath = "/.well-known/jwks"
 
 // Verifier checks OIDC tokens GitHub Actions issues to workflow runs.
 type Verifier struct {
@@ -38,9 +36,9 @@ type Verifier struct {
 // NewVerifier builds a Verifier that trusts tokens issued by GitHub Actions for the
 // configured audience.
 func NewVerifier(ctx context.Context, cfg config.GitHub) *Verifier {
-	keySet := oidc.NewRemoteKeySet(ctx, jwksURL)
+	keySet := oidc.NewRemoteKeySet(ctx, cfg.OIDCIssuerURL+jwksPath)
 	verifier := oidc.NewVerifier(
-		issuerURL,
+		cfg.OIDCIssuerURL,
 		keySet,
 		&oidc.Config{
 			ClientID:             cfg.OIDCAudience,

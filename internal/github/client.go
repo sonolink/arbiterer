@@ -131,9 +131,7 @@ func (c *Client) newAPIRequest(
 	path string,
 	body io.Reader,
 ) (*http.Request, error) {
-	const baseURL = "https://api.github.com"
-
-	req, err := http.NewRequestWithContext(ctx, method, baseURL+path, body)
+	req, err := http.NewRequestWithContext(ctx, method, c.cfg.APIURL+path, body)
 	if err != nil {
 		return nil, err
 	}
@@ -151,9 +149,7 @@ func (c *Client) newOAuthRequest(
 	path string,
 	body io.Reader,
 ) (*http.Request, error) {
-	const baseURL = "https://github.com"
-
-	req, err := http.NewRequestWithContext(ctx, method, baseURL+path, body)
+	req, err := http.NewRequestWithContext(ctx, method, c.cfg.OAuthURL+path, body)
 	if err != nil {
 		return nil, err
 	}
