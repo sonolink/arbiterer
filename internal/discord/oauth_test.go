@@ -97,6 +97,20 @@ func TestTokenResponseTokenRejectsOtherTypes(t *testing.T) {
 	}
 }
 
+// TestTokenResponseTokenRejectsAnEmptyAccessToken checks that a response
+// missing the one field we are asking for is caught here, rather than being
+// stored and failing at the next call that uses it.
+func TestTokenResponseTokenRejectsAnEmptyAccessToken(t *testing.T) {
+	t.Parallel()
+
+	tr := bearer
+	tr.AccessToken = ""
+
+	if _, err := tr.token(); err == nil {
+		t.Error("token accepted an empty access_token, want an error")
+	}
+}
+
 // TestTokenResponseTokenSplitsTheScopes checks that the granted scopes are split
 // out of the single space separated string Discord sends. They can differ from
 // what was asked for, so what comes back is what gets stored.
