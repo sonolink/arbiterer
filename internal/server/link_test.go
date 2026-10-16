@@ -45,14 +45,17 @@ func newLinkServer(t *testing.T, lifetime time.Duration) *Server {
 	}
 }
 
-// testNonce is the nonce used by the fixtures in this file.
-const testNonce = "a-nonce"
+// Fixture values shared by the tests in this package.
+const (
+	testNonce      = "a-nonce"
+	testRepository = "sonolink/arbiterer"
+)
 
 func testLinkToken() linkToken {
 	return linkToken{
 		GitHubUserID: "555",
 		RepositoryID: 42,
-		Repository:   "sonolink/arbiterer",
+		Repository:   testRepository,
 		IssueNumber:  7,
 		Nonce:        testNonce,
 	}
@@ -141,7 +144,7 @@ func TestLinkCookieRoundTrip(t *testing.T) {
 		Nonce:        testNonce,
 		RepositoryID: 42,
 		GitHubUserID: "555",
-		Repository:   "sonolink/arbiterer",
+		Repository:   testRepository,
 		IssueNumber:  7,
 	}
 
