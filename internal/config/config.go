@@ -142,6 +142,7 @@ type Discord struct {
 	ClientID     string `env:"DISCORD_CLIENT_ID,required"`
 	ClientSecret Secret `env:"-"`
 	RedirectURI  string `env:"DISCORD_REDIRECT_URI,required"`
+	APIURL       string `env:"DISCORD_API_URL" envDefault:"https://discord.com/api/v10"`
 }
 
 // Postgres holds the configuration to connect to the postgres database.
@@ -228,11 +229,14 @@ type Secrets struct {
 
 // GitHub holds the application settings used for OAuth and OIDC.
 type GitHub struct {
-	ClientID     string        `env:"GITHUB_CLIENT_ID,required"`
-	ClientSecret Secret        `env:"-"`
-	PrivateKey   RSAPrivateKey `env:"-"`
-	RedirectURI  string        `env:"GITHUB_REDIRECT_URI,required"`
-	OIDCAudience string        `env:"GITHUB_OIDC_AUDIENCE,required"`
+	ClientID      string        `env:"GITHUB_CLIENT_ID,required"`
+	ClientSecret  Secret        `env:"-"`
+	PrivateKey    RSAPrivateKey `env:"-"`
+	RedirectURI   string        `env:"GITHUB_REDIRECT_URI,required"`
+	OIDCAudience  string        `env:"GITHUB_OIDC_AUDIENCE,required"`
+	APIURL        string        `env:"GITHUB_API_URL"     envDefault:"https://api.github.com"`
+	OAuthURL      string        `env:"GITHUB_OAUTH_URL"   envDefault:"https://github.com"`
+	OIDCIssuerURL string        `env:"GITHUB_OIDC_ISSUER" envDefault:"https://token.actions.githubusercontent.com"`
 }
 
 // RSAPrivateKey is a GitHub App's RSA private key, decoded from a PEM encoded
