@@ -10,6 +10,11 @@ on:
       environment:
         required: true
         type: string
+      release-app:
+        description: Also check that the release GitHub App can create a token for this repository
+        required: false
+        default: false
+        type: boolean
 
 permissions: {}
 
@@ -38,3 +43,39 @@ jobs:
             /*) ;;
             *) echo "::error::DEPLOY_PATH must be an absolute path"; exit 1 ;;
           esac
+
+      - name: Verify host fingerprint
+        env:
+          FINGERPRINT: ${{ secrets.DEPLOY_HOST_FINGERPRINT }}
+          HOST: ${{ secrets.DEPLOY_HOST }}
+          PORT: ${{ secrets.DEPLOY_PORT }}
+        run: |
+          keys=$(ssh-keyscan -T 10 -p "${PORT:-22}" -t ecdsa,ed25519,rsa "$HOST" 2>/dev/null | ssh-keygen -lf -) || true
+          if [ -z "$keys" ]; then
+            echo "::error::could not read the host keys of the deploy host (check DEPLOY_HOST and DEPLOY_PORT)"
+            exit 1
+          fi
+          if ! printf '%s\n' "$keys" | grep -qF -- "$FINGERPRINT"; then
+            echo "::error::DEPLOY_HOST_FINGERPRINT matches none of the host's keys, it offers:"
+            printf '%s\n' "$keys" | awk '{print $2, $NF}'
+            exit 1
+          fi
+
+      - name: Check release app values
+        if: inputs.release-app
+        env:
+          CLIENT_ID: ${{ vars.RELEASE_APP_CLIENT_ID }}
+          PRIVATE_KEY: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+        run: |
+          if [ -z "$CLIENT_ID" ] || [ -z "$PRIVATE_KEY" ]; then
+            echo "::error::RELEASE_APP_CLIENT_ID (variable) or RELEASE_APP_PRIVATE_KEY (secret) is not set"
+            exit 1
+          fi
+
+      - name: Create release app token
+        if: inputs.release-app
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ vars.RELEASE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          permission-contents: write
