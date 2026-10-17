@@ -1,0 +1,39 @@
+name: Deploy alpha
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [alpha]
+
+permissions: {}
+
+jobs:
+  ci:
+    name: CI
+    permissions:
+      contents: read
+    uses: ./.github/workflows/lint.yml
+
+  image:
+    name: Image
+    needs: [ci]
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/build-image.yml
+    with:
+      tags: |
+        type=sha,format=long
+        type=raw,value=alpha
+
+  deploy:
+    name: Deploy
+    needs: [image]
+    permissions:
+      contents: read
+      packages: read
+    uses: ./.github/workflows/deploy.yml
+    secrets: inherit
+    with:
+      environment: alpha
+      image: ${{ needs.image.outputs.image }}
