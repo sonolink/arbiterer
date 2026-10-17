@@ -46,8 +46,30 @@ jobs:
       - name: Check changelog
         run: sh .github/scripts/release-notes.sh "${GITHUB_REF_NAME#v}"
 
-  ci:
-    name: CI
+  preflight:
+    name: Preflight
+    needs: [prepare]
+    permissions:
+      contents: read
+    uses: ./.github/workflows/preflight.yml
+    secrets: inherit
+    with:
+      environment: production
+              
+  # Lint and tests already ran on the PR and on the push to main, but are run
+  # again here on purpose: if a maintainer tags a release without noticing a
+  # failing main, nothing reaches production. Unlike alpha, releases are rare
+  # (tag pushes only), so the extra CI minutes are cheap. If CI minutes ever
+  # become a cost concern, this is the first duplicate run to drop.
+  test:
+    name: Test
+    needs: [prepare]
+    permissions:
+      contents: read
+    uses: ./.github/workflows/test.yml
+  
+  lint:
+    name: Lint
     needs: [prepare]
     permissions:
       contents: read
@@ -55,7 +77,7 @@ jobs:
 
   image:
     name: Image
-    needs: [prepare, ci]
+    needs: [prepare, preflight, lint, test]
     permissions:
       contents: read
       packages: write
@@ -90,6 +112,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       - name: Create release
         env:
@@ -101,6 +125,13 @@ jobs:
 
       - name: Move tag
         if: needs.prepare.outputs.latest_in_major == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
         run: |
-          git tag --force "${GITHUB_REF_NAME%%.*}"
-          git push --force origin "${GITHUB_REF_NAME%%.*}"
+          major=${GITHUB_REF_NAME%%.*}
+          if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$major" >/dev/null 2>&1; then
+            gh api -X PATCH "repos/$GITHUB_REPOSITORY/git/refs/tags/$major" -f sha="$GITHUB_SHA" -F force=true
+          else
+            gh api -X POST "repos/$GITHUB_REPOSITORY/git/refs" -f ref="refs/tags/$major" -f sha="$GITHUB_SHA"
+          fi

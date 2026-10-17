@@ -1,0 +1,40 @@
+name: Preflight
+
+# Fails fast on a misconfigured environment, before lint/test/image minutes are
+# spent on a deploy that could never reach the server. It needs `environment`
+# only to read that environment's secrets.
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        required: true
+        type: string
+
+permissions: {}
+
+jobs:
+  secrets:
+    name: Deploy secrets
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: ${{ inputs.environment }}
+    steps:
+      - name: Check secrets
+        env:
+          SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          FINGERPRINT: ${{ secrets.DEPLOY_HOST_FINGERPRINT }}
+          HOST: ${{ secrets.DEPLOY_HOST }}
+          LOGIN: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+        run: |
+          if [ -z "$SSH_KEY" ] || [ -z "$FINGERPRINT" ] || [ -z "$HOST" ] || [ -z "$LOGIN" ] || [ -z "$DEPLOY_PATH" ]; then
+            echo "::error::DEPLOY_SSH_KEY, DEPLOY_HOST_FINGERPRINT, DEPLOY_HOST, DEPLOY_USER or DEPLOY_PATH is not set for the ${{ inputs.environment }} environment"
+            exit 1
+          fi
+          case "$DEPLOY_PATH" in
+            /*) ;;
+            *) echo "::error::DEPLOY_PATH must be an absolute path"; exit 1 ;;
+          esac

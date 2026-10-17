@@ -7,16 +7,36 @@ on:
 
 permissions: {}
 
+# Alpha is continuously deployed from every push to the alpha branch.
+# lint.yml and test.yml do not trigger on pushes to alpha themselves (only on PRs
+# and main), so calling them here runs each exactly once per alpha push, and
+# nothing is deployed unless both pass. Calling them via workflow_call (instead of
+# a workflow_run trigger) makes the image/deploy jobs wait on them directly.
 jobs:
-  ci:
-    name: CI
+  preflight:
+    name: Preflight
+    permissions:
+      contents: read
+    uses: ./.github/workflows/preflight.yml
+    secrets: inherit
+    with:
+      environment: alpha
+
+  lint:
+    name: Lint
     permissions:
       contents: read
     uses: ./.github/workflows/lint.yml
 
+  test:
+    name: Test
+    permissions:
+      contents: read
+    uses: ./.github/workflows/test.yml
+
   image:
     name: Image
-    needs: [ci]
+    needs: [preflight, lint, test]
     permissions:
       contents: read
       packages: write

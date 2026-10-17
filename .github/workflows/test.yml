@@ -2,6 +2,7 @@ name: Test
 
 on:
   workflow_dispatch:
+  workflow_call:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
   push:
@@ -9,7 +10,7 @@ on:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   unit:

@@ -7,7 +7,7 @@ notes=$(awk -v heading="## [$1]" '
     found { print }
 ' CHANGELOG.md)
 
-if [ -z "$(printf '%s' "$notes" | tr -d '[:space:]')" ]; then
+if [ -z "$(printf '%s' "$notes" | grep -v '^#' | tr -d '[:space:]')" ]; then
     echo "CHANGELOG.md has no notes under '## [$1]'" >&2
     exit 1
 fi

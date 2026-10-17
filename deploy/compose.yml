@@ -33,7 +33,7 @@ services:
       - storage_encryption_key
       - browser_encryption_key
     ports:
-      - "127.0.0.1:${SERVER_PORT}:8080"
+      - "127.0.0.1:${SERVER_PORT:-8080}:8080"
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8080/v1/healthz"]
       interval: 10s
@@ -66,7 +66,7 @@ services:
     secrets:
       - postgres_password
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER}"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-postgres}"]
       interval: 5s
       timeout: 5s
       retries: 5

@@ -35,40 +35,31 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Set up SSH
-        env:
-          SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
-          KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
-          HOST: ${{ secrets.DEPLOY_HOST }}
-          LOGIN: ${{ secrets.DEPLOY_USER }}
-          PORT: ${{ secrets.DEPLOY_PORT }}
-        run: |
-          if [ -z "$SSH_KEY" ] || [ -z "$KNOWN_HOSTS" ] || [ -z "$HOST" ] || [ -z "$LOGIN" ] || [ -z "$DEPLOY_PATH" ]; then
-            echo "::error::DEPLOY_SSH_KEY, DEPLOY_KNOWN_HOSTS, DEPLOY_HOST, DEPLOY_USER or DEPLOY_PATH is not set for this environment"
-            exit 1
-          fi
-          install -m 700 -d ~/.ssh
-          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
-          chmod 600 ~/.ssh/deploy_key
-          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
-          cat > ~/.ssh/config <<EOF
-          Host deploy
-            HostName $HOST
-            User $LOGIN
-            Port ${PORT:-22}
-            IdentityFile ~/.ssh/deploy_key
-            IdentitiesOnly yes
-            StrictHostKeyChecking yes
-          EOF
-
-      - name: Upload compose
-        run: ssh deploy "cat > '$DEPLOY_PATH/compose.yml'" < deploy/compose.yml
-
-      - name: Log in to GHCR
-        env:
-          TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          ACTOR: ${{ github.actor }}
-        run: printf '%s' "$TOKEN" | ssh deploy "docker --config '$DEPLOY_PATH/.docker' login ghcr.io -u '$ACTOR' --password-stdin"
+      - name: Upload compose and deploy script
+        uses: appleboy/scp-action@ff85246acaad7bdce478db94a363cd2bf7c90345 # v1.0.0
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          port: ${{ secrets.DEPLOY_PORT || '22' }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          fingerprint: ${{ secrets.DEPLOY_HOST_FINGERPRINT }}
+          source: deploy/compose.yml,deploy/deploy.sh
+          target: ${{ env.DEPLOY_PATH }}
+          strip_components: 1
 
       - name: Deploy
-        run: ssh deploy "sh -s -- '$DEPLOY_PATH' '$IMAGE'" < deploy/deploy.sh
+        uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2 # v1.2.5
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GHCR_ACTOR: ${{ github.actor }}
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          port: ${{ secrets.DEPLOY_PORT || '22' }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          fingerprint: ${{ secrets.DEPLOY_HOST_FINGERPRINT }}
+          envs: DEPLOY_PATH,IMAGE,GHCR_TOKEN,GHCR_ACTOR
+          script: |
+            set -eu
+            printf '%s' "$GHCR_TOKEN" | docker --config "$DEPLOY_PATH/.docker" login ghcr.io -u "$GHCR_ACTOR" --password-stdin
+            sh "$DEPLOY_PATH/deploy.sh" "$DEPLOY_PATH" "$IMAGE"

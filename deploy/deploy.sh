@@ -13,7 +13,7 @@ compose() {
 
 compose pull --quiet
 compose up --detach --wait postgres
-compose run --rm migrator
+compose run --rm -T migrator </dev/null
 compose up --detach --wait --remove-orphans
 
 docker images --quiet "${2%@*}" | sort -u | xargs -r docker rmi >/dev/null 2>&1 || true
