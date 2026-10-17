@@ -275,30 +275,18 @@ func (s *Server) storeRefreshedGrant(
 // failures. Losing this write costs the user their grant, since Discord has
 // already invalidated the token it replaced.
 func (s *Server) storeRefreshedTokens(ctx context.Context, user *storage.DiscordUser) error {
-	var err error
+	err := retry(ctx, tokenStoreAttempts, tokenStoreBackoff, func() error {
+		err := s.store.UpdateDiscordUserTokens(ctx, user)
 
-	backoff := tokenStoreBackoff
-
-loop:
-	for attempt := 1; attempt <= tokenStoreAttempts; attempt++ {
-		err = s.store.UpdateDiscordUserTokens(ctx, user)
-		if err == nil {
-			return nil
-		}
-
+		// The row is gone, so the same update can only ever find nothing.
 		if errors.Is(err, storage.ErrNotFound) {
-			break
+			return permanent(err)
 		}
 
-		if attempt < tokenStoreAttempts {
-			select {
-			case <-ctx.Done():
-				err = ctx.Err()
-				break loop
-			case <-time.After(backoff):
-				backoff *= 2
-			}
-		}
+		return err
+	})
+	if err == nil {
+		return nil
 	}
 
 	s.logger.Error(

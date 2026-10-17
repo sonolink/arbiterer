@@ -72,6 +72,10 @@ func (tr tokenResponse) token() (*Token, error) {
 		return nil, fmt.Errorf("discord: unexpected token_type %q", tr.TokenType)
 	}
 
+	if tr.AccessToken == "" {
+		return nil, fmt.Errorf("discord: token response has no access_token")
+	}
+
 	return &Token{
 		AccessToken:  tr.AccessToken,
 		RefreshToken: tr.RefreshToken,
