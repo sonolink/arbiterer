@@ -23,7 +23,7 @@ import (
 	"time"
 )
 
-// testBackoff keeps the waits short enough that exercising them doesnt cost much of ci time.
+// testBackoff keeps the waits short enough that exercising them doesn't cost much of ci time.
 const testBackoff = time.Millisecond
 
 var errTransient = errors.New("transient")
