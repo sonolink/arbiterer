@@ -7,6 +7,7 @@
 - [ ] New feature (adds functionality, non-breaking)
 - [ ] Breaking change (alters existing behaviour/compatibility)
 - [ ] Refactor (internal cleanup, no behaviour change)
+- [ ] Tests (adds or updates tests)
 - [ ] CI / dependency update
 - [ ] Documentation update
 
