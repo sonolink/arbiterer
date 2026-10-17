@@ -64,14 +64,14 @@ jobs:
   # become a cost concern, this is the first duplicate run to drop.
   test:
     name: Test
-    needs: [prepare]
+    needs: [prepare, preflight]
     permissions:
       contents: read
     uses: ./.github/workflows/test.yml
   
   lint:
     name: Lint
-    needs: [prepare]
+    needs: [prepare, preflight]
     permissions:
       contents: read
     uses: ./.github/workflows/lint.yml
