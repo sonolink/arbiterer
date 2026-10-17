@@ -128,7 +128,7 @@ func TestOpenLinkTokenRejectsOtherContexts(t *testing.T) {
 			t.Parallel()
 
 			if _, err := s.openLinkToken(encoded, aad); err == nil {
-				t.Errorf("openLinkToken accepted a token sealed for %s, want an error", linkTokenAAD)
+				t.Errorf("openLinkToken accepted a link token opened as %s, want an error", name)
 			}
 		})
 	}
