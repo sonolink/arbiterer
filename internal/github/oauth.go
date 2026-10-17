@@ -28,8 +28,6 @@ import (
 
 // AuthorizeURL builds the GitHub consent page URL for the given state.
 func (c *Client) AuthorizeURL(state string) string {
-	const oauthURL = "https://github.com"
-
 	q := url.Values{
 		"client_id":    {c.cfg.ClientID},
 		"redirect_uri": {c.cfg.RedirectURI},
@@ -40,7 +38,7 @@ func (c *Client) AuthorizeURL(state string) string {
 		RawQuery: q.Encode(),
 	}
 
-	return oauthURL + u.RequestURI()
+	return c.cfg.OAuthURL + u.RequestURI()
 }
 
 type tokenResponse struct {

@@ -23,13 +23,19 @@ import (
 	"strings"
 )
 
-// secret returns the value of the secret named name. When name_FILE is set it
-// names a file to read the value from (Docker secrets); otherwise name itself
-// is read from the environment.
+// secret returns the value of the secret named name, which must not itself end
+// in _FILE. The value comes from name_FILE, naming a file to read it from
+// (Docker secrets), or from name in the environment. Setting both is an error,
+// so that a deployment half-migrated to files cannot keep reading a stale
+// variable without saying so.
 func secret(name string) (string, error) {
 	value := os.Getenv(name)
+	path := os.Getenv(name + "_FILE")
 
-	if path := os.Getenv(name + "_FILE"); path != "" {
+	switch {
+	case value != "" && path != "":
+		return "", fmt.Errorf("config: %s and %s_FILE are both set, but are exclusive", name, name)
+	case path != "":
 		contents, err := os.ReadFile(path) //nolint:gosec // path comes from the deployment.
 		if err != nil {
 			return "", fmt.Errorf("config: reading %s from %q: %w", name, path, err)

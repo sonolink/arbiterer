@@ -12,6 +12,7 @@ const TAGS = {
     "New feature": "idea: new feature",
     "Breaking change": "status: breaking change",
     "Refactor": "type: refactor",
+    "Tests": "type: tests",
     "CI / dependency update": "area: dependencies",
     "Documentation update": "type: documentation",
 };
