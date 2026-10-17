@@ -5,7 +5,8 @@
 A GitHub Action that lets your Discord community decide whose contributions get through.
 
 [![License](https://img.shields.io/github/license/sonolink/arbiterer)](LICENSE)
-[![CI](https://github.com/sonolink/arbiterer/actions/workflows/lint.yml/badge.svg?branch=main)](https://github.com/sonolink/arbiterer/actions/workflows/lint.yml)
+[![Tests](https://github.com/sonolink/arbiterer/actions/workflows/test.yml/badge.svg?branch=main)](https://github.com/sonolink/arbiterer/actions/workflows/test.yml)
+[![Lint & Build](https://github.com/sonolink/arbiterer/actions/workflows/lint.yml/badge.svg?branch=main)](https://github.com/sonolink/arbiterer/actions/workflows/lint.yml)
 [![Discord](https://img.shields.io/discord/1471146455002775624?label=discord)](https://discord.gg/tPHVWBPedt)
 
 </div>
