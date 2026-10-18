@@ -74,6 +74,7 @@ func (s *Server) addRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /v1/github/pulls/close", s.handleGitHubPullRequestClose)
 	mux.HandleFunc("POST /v1/github/pulls/rules-failed", s.handleGitHubPullRequestRulesFailed)
 	mux.HandleFunc("POST /v1/github/pulls/open", s.handleGitHubPullRequestOpen)
+	mux.HandleFunc("POST /v1/github/comments/react", s.handleGitHubCommentReact)
 	mux.HandleFunc("GET /v1/link", s.handleLink)
 	mux.HandleFunc("GET /v1/link/github/callback", s.handleLinkGitHubCallback)
 	mux.HandleFunc("GET /v1/link/discord", s.handleLinkDiscord)
