@@ -95,7 +95,7 @@ jobs:
     permissions:
       contents: read
       packages: read
-    uses: ./.github/workflows/deploy-production.yml
+    uses: ./.github/workflows/deploy.yml
     secrets: inherit
     with:
       environment: production
