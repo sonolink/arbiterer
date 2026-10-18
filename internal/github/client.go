@@ -30,13 +30,14 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/sonolink/arbiterer/internal/config"
+	"github.com/sonolink/arbiterer/internal/version"
 )
 
 const (
 	maxResponseBytes = 1 << 20
 
-	// version is a place holder, it should actually later come from somewhere standard.
-	userAgent = "arbiterer/0.1 (https://github.com/sonolink/arbiterer)"
+	// userAgent identifies the app, which GitHub requires of every request.
+	userAgent = "arbiterer/" + version.Version + " (https://github.com/sonolink/arbiterer)"
 
 	// jwtLifetime is how long a GitHub App JWT is valid for (maximum of 10 minutes).
 	jwtLifetime = 9 * time.Minute
