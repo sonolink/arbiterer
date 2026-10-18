@@ -8,7 +8,7 @@ on:
         type: string
     outputs:
       image:
-        value: ghcr.io/${{ github.repository }}@${{ jobs.build.outputs.digest }}
+        value: ${{ jobs.build.outputs.image }}
 
 permissions: {}
 
@@ -22,6 +22,7 @@ jobs:
     timeout-minutes: 20
     outputs:
       digest: ${{ steps.build.outputs.digest }}
+      image: ${{ steps.ref.outputs.image }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -56,3 +57,9 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Image reference
+        id: ref
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: echo "image=ghcr.io/${GITHUB_REPOSITORY,,}@${DIGEST}" >> "$GITHUB_OUTPUT"
