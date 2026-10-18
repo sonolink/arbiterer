@@ -27,4 +27,4 @@ Once a report is received:
 
 ## Disclosure Policy
 
-We ask that you do not disclose the vulnerability publicly until a fix has been released. This helps protect the community and users who rely on aArbiter for their production audio systems.
+We ask that you do not disclose the vulnerability publicly until a fix has been released. This helps protect the community and users who rely on Arbiterer for their production audio systems.
