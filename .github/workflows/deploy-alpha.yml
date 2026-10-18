@@ -7,11 +7,6 @@ on:
 
 permissions: {}
 
-# Alpha is continuously deployed from every push to the alpha branch.
-# lint.yml and test.yml do not trigger on pushes to alpha themselves (only on PRs
-# and main), so calling them here runs each exactly once per alpha push, and
-# nothing is deployed unless both pass. Calling them via workflow_call (instead of
-# a workflow_run trigger) makes the image/deploy jobs wait on them directly.
 jobs:
   preflight:
     name: Preflight
@@ -54,7 +49,7 @@ jobs:
     permissions:
       contents: read
       packages: read
-    uses: ./.github/workflows/deploy.yml
+    uses: ./.github/workflows/deploy-production.yml
     secrets: inherit
     with:
       environment: alpha

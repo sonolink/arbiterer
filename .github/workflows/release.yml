@@ -56,19 +56,17 @@ jobs:
     with:
       environment: production
       release-app: true
-              
+
   # Lint and tests already ran on the PR and on the push to main, but are run
   # again here on purpose: if a maintainer tags a release without noticing a
-  # failing main, nothing reaches production. Unlike alpha, releases are rare
-  # (tag pushes only), so the extra CI minutes are cheap. If CI minutes ever
-  # become a cost concern, this is the first duplicate run to drop.
+  # failing main, nothing reaches production.
   test:
     name: Test
     needs: [prepare, preflight]
     permissions:
       contents: read
     uses: ./.github/workflows/test.yml
-  
+
   lint:
     name: Lint
     needs: [prepare, preflight]
@@ -97,7 +95,7 @@ jobs:
     permissions:
       contents: read
       packages: read
-    uses: ./.github/workflows/deploy.yml
+    uses: ./.github/workflows/deploy-production.yml
     secrets: inherit
     with:
       environment: production

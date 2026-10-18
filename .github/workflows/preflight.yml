@@ -1,9 +1,5 @@
 name: Preflight
 
-# Fails fast on a misconfigured environment, before lint/test/image minutes are
-# spent on a deploy that could never reach the server. It needs `environment`
-# only to read that environment's secrets.
-
 on:
   workflow_call:
     inputs:
