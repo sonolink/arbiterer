@@ -11,18 +11,24 @@ const post = require("./api");
 
 /**
  * @typedef {Object} Command
- * @property {(input: CommandInput) => string | null} authorize Returns why the commenter may not run the command, or null when they may.
+ * @property {(input: CommandInput) => boolean} authorize Returns true when the commenter may run the command. It logs why when it returns false.
  * @property {(input: CommandInput) => Promise<boolean>} run Runs the command. Resolves true when the
  *   verification flow should then run for the pull request, false when the command is fully handled.
  */
 
-/**
- * Only the pull request author may run the command.
- * @param {CommandInput} input
- * @returns {string | null}
- */
-function authorOnly({ comment, pullRequest }) {
-    return comment.user?.id === pullRequest.user?.id ? null : `@${comment.user?.login} is not the pull request author`;
+function HandleRecheckCommand({ core, context, github, pullRequest, comment }) {
+    if (comment.user?.id !== pullRequest.user?.id) {
+        core.info(`Skipping: comment author @${comment.user?.login} is not the pull request author.`);
+        return false;
+    }
+
+    if (pullRequest.merged) {
+        core.info("Skipping: the pull request is already merged.");
+        return false;
+    }
+
+    core.info("Re-running verification because the pull request author requested it.");
+    return true;
 }
 
 /**
@@ -31,7 +37,7 @@ function authorOnly({ comment, pullRequest }) {
  */
 const commands = {
     recheck: {
-        authorize: (input) => authorOnly(input) ?? (input.pullRequest.merged ? "the pull request is already merged" : null),
+        authorize: HandleRecheckCommand,
         run: async () => true,
     },
 };
@@ -85,9 +91,7 @@ async function commandContext({ core, context, github }) {
     });
 
     const input = { core, context, github, pullRequest, comment };
-    const denied = parsed.command.authorize(input);
-    if (denied) {
-        core.info(`Skipping /${parsed.name}: ${denied}.`);
+    if (!parsed.command.authorize(input)) {
         return null;
     }
 

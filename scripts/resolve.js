@@ -58,7 +58,6 @@ module.exports = async function resolve({ core, context: eventContext, github })
       return;
     }
 
-    core.info("Re-running verification because the pull request author requested it.");
     context = command.context;
   }
 
