@@ -1,0 +1,52 @@
+name: Migrate
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Environment whose database to migrate
+        required: true
+        type: choice
+        options:
+          - alpha
+          - production
+      image:
+        description: Image to migrate at, defaults to the one already deployed
+        required: false
+        type: string
+
+permissions: {}
+
+jobs:
+  migrate:
+    name: Migrate
+    permissions:
+      contents: read
+      packages: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: ${{ inputs.environment }}
+    # Shared with deploy so that a migration and a deploy of the same
+    # environment cannot reach the host at the same time.
+    concurrency:
+      group: deploy-${{ inputs.environment }}
+      cancel-in-progress: false
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Migrate
+        uses: ./.github/actions/run-on-host
+        with:
+          environment: ${{ inputs.environment }}
+          host: ${{ secrets.DEPLOY_HOST }}
+          port: ${{ secrets.DEPLOY_PORT || '22' }}
+          user: ${{ secrets.DEPLOY_USER }}
+          path: ${{ secrets.DEPLOY_PATH }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          fingerprint: ${{ secrets.DEPLOY_HOST_FINGERPRINT }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          script: migrate.sh
+          image: ${{ inputs.image }}

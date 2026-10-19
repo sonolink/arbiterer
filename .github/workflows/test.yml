@@ -2,14 +2,16 @@ name: Tests
 
 on:
   workflow_dispatch:
+  workflow_call:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
-  push:
-    branches: [main]
 
+# The group is named rather than taken from github.workflow, which is the
+# caller's name when this is reused and would collide with the other workflows
+# the same caller runs.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  group: test-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   unit:
