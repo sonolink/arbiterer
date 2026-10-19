@@ -235,12 +235,12 @@ This section does not apply to the extent a claim arises from our own willful mi
 
 ## 15. Governing law and disputes
 
-These Terms are governed by the laws of the jurisdiction where the SonoLink Development Team is established, without regard to conflict-of-law rules.
-The courts there have exclusive jurisdiction, except where mandatory law gives you the right to bring a claim elsewhere.
+These Terms are governed by the laws of the Netherlands, without regard to conflict-of-law rules.
+The competent courts of the Netherlands have exclusive jurisdiction, except where mandatory law gives you the right to bring a claim elsewhere.
 If you are a consumer, you keep the protection of the mandatory laws of your country of residence.
 
 Before filing a claim, please contact us at [admin@arbiterer.com](mailto:admin@arbiterer.com) so we can try to resolve the issue informally.
-Nothing in this section prevents either party from seeking injunctive or other equitable relief.
+Nothing in this section prevents either party from seeking interim, injunctive, or other equitable relief.
 
 ## 16. Changes to these Terms
 
