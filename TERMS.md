@@ -26,7 +26,7 @@ In these Terms:
 
 ## 3. Eligibility
 
-You must be at least 13 years old, or the minimum age required in your country, and old enough to use GitHub and Discord under their terms.
+You must be at least 13 years old, or the minimum age required in your country, and old enough to use GitHub and Discord under their terms, whichever is higher.
 You must comply with GitHub's and Discord's terms and policies.
 If you use the Service for an organization, you must have authority to bind it.
 
@@ -101,7 +101,7 @@ Untrusted Rules can access the workflow's token, secrets, and the runner.
 
 ### 6.6 Account security
 
-Secure the App installation, repository settings, workflow files, and any tokens or secrets you use.
+By using Arbiterer you agree to Secure the App installation, repository settings, workflow files, and any tokens or secrets you use in respect to the operation and communication with Arbiterer, and you agree to take full responsibility for any problem, issue, mistake, security breach, or other incident resulting partially or entirely from your failure to do so.
 
 ### 6.7 Ending use
 
@@ -153,9 +153,9 @@ The Service may link to third-party sites, and we are not responsible for them.
 
 ## 10. Privacy
 
-Our [Privacy Policy](https://github.com/sonolink/arbiterer/blob/main/PRIVACY.md) explains what we collect and how we use it.
-It is part of these Terms.
-If these Terms conflict with the Privacy Policy about personal data, the Privacy Policy controls.
+Our [Privacy Policy](https://github.com/sonolink/arbiterer/blob/main/PRIVACY.md) explains what  data we collect and, how and why we use it.
+It shall be incorporated in this terms by reference.
+If these Terms conflict with the Privacy Policy about personal data, the Privacy Policy shall prevail.
 
 Maintainers are responsible for providing any notices and getting any consents required for their use of Contributor data.
 Do not put sensitive personal data in Rules, comments, or other inputs.
@@ -166,7 +166,7 @@ Do not use the Service to process special categories of personal data unless you
 We run the Service on a best-effort basis.
 We do not guarantee availability, uptime, or that checks will always run or complete.
 If our server, GitHub, or Discord is unavailable, checks may fail and pull requests may stay closed until things recover.
-Do not rely on Arbiterer as the only safeguard for anything important, including security, compliance, or access control.
+You shall not rely on Arbiterer as the only safeguard for anything important, including security, compliance, or access control.
 
 We do not provide a support contract or service-level agreement.
 Support is best effort through the repository and our Discord server.

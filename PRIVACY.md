@@ -2,7 +2,8 @@
 
 Effective date: October 19, 2026
 
-Applies to: the GitHub App, the Action when it connects to the hosted Service, the linking flow at `arbiterer.com`, and the API at `api.arbiterer.com`.
+This Privacy policy applies to the GitHub App, the GitHub Action when it connects to the hosted Service, the linking flow at `arbiterer.com`, and the API at `api.arbiterer.com`.
+
 Related: [Terms of Service](https://github.com/sonolink/arbiterer/blob/main/TERMS.md) · [Security Policy](https://github.com/sonolink/arbiterer/blob/main/.github/SECURITY.md)
 
 ## Summary
@@ -44,7 +45,7 @@ The table describes each category, why we use it, and how long we keep it.
 | Discord user ID and tokens | Discord authorization | Identify the linked account, read profile and membership, and refresh access | Contract | Yes (tokens encrypted with AES-256-GCM) | While the link exists; an old token record may remain after replacement until you ask us to delete it or it is no longer needed |
 | Repository and pull request data | Action OIDC token and request | Scope links, update comments, rerun checks, and close or reopen pull requests | Contract | Yes | While needed to operate the Service |
 | GitHub OAuth and OIDC tokens | GitHub sign-in and the Action | Verify your GitHub identity and the calling repository | Contract | No | Discarded after use |
-| Discord profile and membership | Discord API | Pass data to the repository's workflow | Contract | No | Not stored by us; may appear in workflow logs |
+| Discord profile and member data | Discord API | Pass data to the repository's workflow | Contract | No | Not stored by us; may appear in workflow logs |
 | Linking cookies and URL token | Our server | Secure the linking flow and bind it to your browser | Contract | Yes | 10 minutes by default for cookies; 15 minutes by default for the URL token |
 | Server logs | Our servers and hosting provider | Security, abuse prevention, and debugging | Legitimate interests | Yes | Only as long as needed |
 
@@ -53,8 +54,8 @@ They are `HttpOnly`, `Secure`, and `SameSite=Lax`, are limited to the `/v1/link`
 The link URL also carries a sealed token with your GitHub user ID, repository, and pull request number, which expires after 15 minutes by default.
 The cookies and link token are sealed with AES-GCM under a separate configured key from the database encryption key.
 
-On public repositories, Actions logs are public.
-Discord profile and member data passed to a workflow may appear in those logs if a Maintainer prints it.
+On public repositories, Actions logs may be publicly visible.
+If this is the case, Discord profile and member data passed to a workflow may appear in those logs if a Maintainer prints it.
 
 ## What we do not collect
 
@@ -130,9 +131,9 @@ We will respond within the time required by law.
 We may keep some data if the law requires it or if we need it to establish, exercise, or defend legal claims.
 If we cannot fulfill a request, we will explain why.
 
-### EEA and UK
+### GDPR, UK GDPR and other Data Protection Regulations
 
-If you are in the EEA or UK, you have the right to restrict or object to processing, receive your data in a portable format, withdraw consent where we rely on it, and complain to your local data protection authority.
+If you are located in the EEA, the United Kingdom, or other jurisdictions, Data Protection Regulations may grant you the right to restrict or object to processing, receive your data in a portable format, withdraw consent where we rely on it, and complain to your local data protection authority.
 You can contact us first, or complain directly.
 
 ## Children
