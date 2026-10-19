@@ -5,6 +5,7 @@
 A GitHub Action that lets your Discord community decide whose contributions get through.
 
 [![License](https://img.shields.io/github/license/sonolink/arbiterer)](LICENSE)
+[![Release](https://img.shields.io/github/v/release/sonolink/arbiterer?display_name=tag&sort=semver)](https://github.com/sonolink/arbiterer/releases/latest)
 [![Discord](https://img.shields.io/discord/1471146455002775624?label=discord)](https://discord.gg/tPHVWBPedt)
 
 </div>
@@ -12,29 +13,41 @@ A GitHub Action that lets your Discord community decide whose contributions get 
 ## How it works
 
 1. A contributor opens a pull request.
-2. Arbiterer checks whether the author has linked their GitHub account to a Discord account. If not, it comments on the PR with a link to do so.
-3. Once linked, your rules run against the author's Discord identity. The check passes or fails depending on the result.
+2. Arbiterer checks whether the author has linked their GitHub account to Discord. If not, it comments with a link to do so.
+3. Once linked, your rules run against the author's Discord identity, and the check passes or fails.
+4. The author can comment `/arbiterer recheck` to run the check again without pushing.
 
-Rules are optional. Without them, the author only needs to link their accounts.
+Rules are optional. Without them, authors only need to link their accounts.  
+With `close-on-failure`, a failed check closes the pull request and a later pass reopens it.
+
+> [!IMPORTANT]
+> Links are **one-to-one per repository**: one GitHub account maps to one Discord account, and vice versa. The same Discord account can be linked to different GitHub accounts in different repositories.
+
+### Rechecking a pull request
+
+Arbiterer re-runs the check automatically after the author links their account. If a rule failed, the author can request another run without pushing:
+
+```text
+/arbiterer recheck
+```
+
+Arbiterer adds a thumbs-up reaction when it starts a manual recheck, and a confused reaction when it cannot.
 
 > [!NOTE]
-> Links are scoped per repository and strictly **one-to-one**: within a repository, one GitHub account maps to one Discord account and vice versa. The same Discord account can still be linked to different GitHub accounts in _different_ repositories.
+> Only the pull request author can trigger a manual recheck, at most once every five minutes per pull request. Merged pull requests are ignored, and a passing recheck reopens a pull request Arbiterer closed.
 
-## Getting Started
+## Getting started
 
-### Installation
+### Install the GitHub App
 
-Install the [Arbiterer GitHub App](https://github.com/apps/arbiterer) on your repository or organization. The app posts the linking comments on pull requests.
+Install the [Arbiterer GitHub App](https://github.com/apps/arbiterer) on every repository that uses Arbiterer, or on the organization that owns those repositories. The app posts and updates the comments that guide authors through account linking; _without it, every run fails_.
 
-> [!CAUTION]
-> The app must be installed on every repository that uses the action. If it isn't, the action fails on every run.
-
-### Usage
+### Add the workflow
 
 Add a workflow to `.github/workflows/`:
 
 > [!WARNING]
-> Use `pull_request_target` for pull requests from forks, so the workflow and your rules always run from your default branch.
+> Use `pull_request_target` so fork pull requests run the workflow and rules from your default branch.
 
 ```yaml
 name: Arbiterer
@@ -44,9 +57,9 @@ on:
     types: [opened, synchronize, reopened]
 
 permissions:
-  contents: read # Lets Arbiterer read the repository metadata
-  pull-requests: write # Needed to open/close the PR (when close-on-failure is true)
-  id-token: write # Lets Arbiterer verify which repository the request comes from (OIDC token)
+  contents: read # Read repository metadata
+  pull-requests: write # Open and close pull requests (when close-on-failure is enabled)
+  id-token: write # Verify the request comes from this repository (OIDC)
 
 jobs:
   arbiterer:
@@ -54,11 +67,11 @@ jobs:
     steps:
       - uses: sonolink/arbiterer@v1
         with:
-          # Exempt the repository owner, organization members and collaborators.
+          # Exempt the repository owner, organization members, and collaborators.
           exempt-associations: OWNER,MEMBER,COLLABORATOR
 ```
 
-That's all you need if authors only have to link their accounts. To enforce conditions on the linked Discord account, add [rules](#rules).
+If you only need authors to link their accounts, this is enough. To enforce conditions on the linked Discord account, add [rules](#rules).
 
 ## Configuration
 
@@ -66,24 +79,24 @@ That's all you need if authors only have to link their accounts. To enforce cond
 
 All inputs are optional.
 
-| Input                 | Description                                                                                                                                                                                                                       | Default |
-| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- |
-| `rules`               | JavaScript that decides whether the author passes. See [Rules](#rules). Leave empty to only require a linked Discord account.                                                                                                     | `""`    |
-| `close-on-failure`    | Close the pull request when the author has not linked their accounts or fails the rules, and open it again once they pass. Needs `pull-requests: write` in the workflow's `permissions` and `reopened` in the workflow's `types`. | `false` |
-| `comment-on-linked`   | Post a comment on the pull request confirming the author is already linked. Set to `false` to only comment when the author still has to act. A comment that earlier asked them to act is always updated.                          | `true`  |
-| `exempt-associations` | Comma-separated [GitHub author associations](https://docs.github.com/en/graphql/reference/issues#enum-commentauthorassociation) to skip verification for. Exempt authors need no linked Discord account and skip the rules.       | `""`    |
+| Input                 | Description                                                                                                                                                                               | Default |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- |
+| `rules`               | JavaScript that decides whether the author passes. See [Rules](#rules). Leave empty to require only a linked Discord account.                                                             | `""`    |
+| `close-on-failure`    | Close the pull request when the author is unlinked or fails the rules, and reopen it once they pass. Requires `pull-requests: write` and the `reopened` event type.                       | `false` |
+| `comment-on-linked`   | Post a comment when the author is already linked. Set to `false` to comment only when the author needs to act. An existing comment that asks the author to act is always updated.         | `true`  |
+| `exempt-associations` | Comma-separated [GitHub author associations](https://docs.github.com/en/graphql/reference/issues#enum-commentauthorassociation) to exempt. Exempt authors skip account linking and rules. | `""`    |
 
 ### Rules
 
-The `rules` input is a JavaScript snippet evaluated on every workflow execution. It has access to:
+The `rules` input is JavaScript evaluated on every workflow run. It has access to:
 
-| Name                     | Description                                                                                                                                                         |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `user`                   | The author's Discord [user object](https://docs.discord.com/developers/resources/user#user-object) (flags, MFA status, etc.).                                       |
-| `resolveMember(guildId)` | Async. Returns the author's [guild member object](https://docs.discord.com/developers/resources/guild#guild-member-object), or `null` if they aren't in the server. |
-| `core`                   | The [GitHub Actions toolkit](https://github.com/actions/toolkit). Call `core.setFailed(message)` to fail the check and show `message` to the contributor.           |
+| Name                     | Description                                                                                                                                                          |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `user`                   | The author's Discord [user object](https://docs.discord.com/developers/resources/user#user-object), including flags, MFA status, and more.                           |
+| `resolveMember(guildId)` | Async. Returns the author's [guild member object](https://docs.discord.com/developers/resources/guild#guild-member-object), or `null` if they are not in the server. |
+| `core`                   | The [GitHub Actions toolkit](https://github.com/actions/toolkit). Call `core.setFailed(message)` to fail the check and show `message` to the contributor.            |
 
-For example, to require MFA, guild membership, and a week of tenure:
+For instance, to require MFA, and at least one week of server membership:
 
 ```yaml
 - uses: sonolink/arbiterer@v1
@@ -93,20 +106,20 @@ For example, to require MFA, guild membership, and a week of tenure:
       const weekMs = 7 * 24 * 60 * 60 * 1000;
 
       if (!user.mfa_enabled) {
-        core.setFailed("User doesn't have two-factor auth enabled on their Discord account.");
+        core.setFailed("Enable two-factor authentication on your Discord account.");
         return;
       }
 
       const member = await resolveMember(GUILD);
 
       if (!member) {
-        core.setFailed("User is not a member of https://discord.gg/tPHVWBPedt");
+        core.setFailed("Join the server at https://discord.gg/tPHVWBPedt.");
         return;
       }
 
       const joined = member.joined_at ? Date.parse(member.joined_at) : 0;
-      if (!joined || Date.now() - joined <= weekMs) {
-        core.setFailed(`User joined ${member.joined_at ?? "recently"}. Please wait 7 days after joining.`);
+      if (!joined || Date.now() - joined < weekMs) {
+        core.setFailed(`You joined ${member.joined_at ?? "recently"}. Please wait 7 days before trying again.`);
       }
 ```
 
