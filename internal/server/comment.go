@@ -211,6 +211,54 @@ func (s *Server) syncSetupComment(
 	return s.store.UpsertSetupComment(ctx, comment)
 }
 
+// notifyPassed records that the author now passes the check. It updates only
+// an existing setup comment: with comment-on-linked disabled, a passing run
+// must not start commenting on authors who never needed instructions.
+func (s *Server) notifyPassed(ctx context.Context, claims *github.Claims, issueNumber int64) {
+	if _, err := s.store.SetupCommentByPullRequest(ctx, claims.RepositoryID, issueNumber); err != nil {
+		if errors.Is(err, storage.ErrNotFound) {
+			return
+		}
+
+		s.logger.Error(
+			"looking up setup comment",
+			"error", err,
+			"repository", claims.Repository,
+			"issue_number", issueNumber,
+		)
+
+		return
+	}
+
+	if err := s.syncSetupComment(
+		ctx,
+		claims.RepositoryID,
+		claims.Repository,
+		issueNumber,
+		commentPassed,
+		"",
+		false,
+	); err != nil {
+		s.logSetupCommentError(err)
+	}
+}
+
+// notifyRulesFailed reconciles the setup comment to explain that the author did
+// not satisfy the rules.
+func (s *Server) notifyRulesFailed(ctx context.Context, claims *github.Claims, issueNumber int64) {
+	if err := s.syncSetupComment(
+		ctx,
+		claims.RepositoryID,
+		claims.Repository,
+		issueNumber,
+		commentRulesFailed,
+		workflowRunURL(claims),
+		false,
+	); err != nil {
+		s.logSetupCommentError(err)
+	}
+}
+
 // logSetupCommentError logs a failed comment sync. A missing app installation
 // is the repository's setup to fix, not a server fault, so it only warns.
 func (s *Server) logSetupCommentError(err error) {
