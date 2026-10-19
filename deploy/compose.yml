@@ -42,7 +42,7 @@ services:
     ports:
       - "127.0.0.1:${SERVER_PORT:-8080}:8080"
     healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8080/v1/healthz"]
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8080/healthz"]
       interval: 10s
       timeout: 5s
       retries: 3
