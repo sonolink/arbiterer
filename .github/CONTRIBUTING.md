@@ -67,6 +67,14 @@ Do not report security vulnerabilities through public issues or pull
 requests. See [SECURITY.md](https://github.com/sonolink/arbiterer/blob/main/.github/SECURITY.md)
 for how to report them privately.
 
+## Legal
+
+Our [Terms of Service](https://github.com/sonolink/arbiterer/blob/main/TERMS.md)
+and [Privacy Policy](https://github.com/sonolink/arbiterer/blob/main/PRIVACY.md)
+govern the hosted Service.
+The source code is licensed under the
+[Apache License 2.0](https://github.com/sonolink/arbiterer/blob/main/LICENSE).
+
 ## Questions
 
 If anything in this document is unclear, or you're unsure whether a change
