@@ -41,8 +41,10 @@ const (
 	// has not yet authorized Discord. It is never served by resolve.
 	commentGitHubVerified commentStatus = "github_verified"
 
-	commentUnlinked    commentStatus = "unlinked"
-	commentLinked      commentStatus = "linked"
+	commentUnlinked commentStatus = "unlinked"
+	commentLinked   commentStatus = "linked"
+	commentPassed   commentStatus = "passed"
+
 	commentRevoked     commentStatus = "revoked"
 	commentRulesFailed commentStatus = "rules_failed"
 )
@@ -53,7 +55,7 @@ func setupSteps(status commentStatus, linkURL string) []setupStep {
 	authorizeDiscord := setupStep{text: "Authorize Discord"}
 
 	switch status {
-	case commentLinked:
+	case commentLinked, commentPassed:
 		// Nothing left to do; the comment confirms the link or clears an earlier ask.
 		authorizeGitHub.done = true
 		authorizeDiscord.done = true
@@ -78,7 +80,9 @@ func formatCommentBody(author string, status commentStatus, linkURL string) stri
 
 	switch status {
 	case commentLinked:
-		b.WriteString("your GitHub and Discord accounts are linked.")
+		b.WriteString("your GitHub and Discord accounts are linked. Arbiterer is finishing the check.")
+	case commentPassed:
+		b.WriteString("you're all set — this pull request passes the check.")
 	case commentRevoked:
 		b.WriteString("your Discord link has expired or was revoked. Please follow these steps to link it again:")
 	case commentRulesFailed:
@@ -122,9 +126,9 @@ func formatCommentBody(author string, status commentStatus, linkURL string) stri
 }
 
 // setupCommentNeedsWrite reports whether the setup comment has to be posted or
-// updated. A linked contributor needs no comment unless an earlier one asked
-// them to act or has opted in to a comment confirming the link, and a comment
-// without a link to refresh only changes with the status.
+// updated. A linked or passing contributor needs no comment unless an earlier
+// one asked them to act or has opted in to a comment, and a comment without a
+// link to refresh only changes with the status.
 func setupCommentNeedsWrite(
 	stored *storage.SetupComment,
 	status commentStatus,
@@ -132,7 +136,12 @@ func setupCommentNeedsWrite(
 	commentOnLinked bool,
 ) bool {
 	if stored == nil {
-		return status != commentLinked || commentOnLinked
+		return (status != commentLinked && status != commentPassed) || commentOnLinked
+	}
+
+	if status == commentLinked && linkURL == "" &&
+		(stored.Status == string(commentPassed) || stored.Status == string(commentRulesFailed)) {
+		return false
 	}
 
 	return stored.Status != string(status) || linkURL != ""
@@ -187,7 +196,7 @@ func (s *Server) syncSetupComment(
 		commentDeleted := errors.As(err, &apiErr) && apiErr.Status == http.StatusNotFound
 
 		switch {
-		case err == nil, commentDeleted && status == commentLinked:
+		case err == nil, commentDeleted && (status == commentLinked || status == commentPassed):
 			return s.store.UpsertSetupComment(ctx, comment)
 		case !commentDeleted:
 			return fmt.Errorf("updating comment: %w", err)

@@ -81,6 +81,37 @@ async function openPullRequest({ core, context, reason = "the author is linked a
 }
 
 /**
+ * Updates an existing setup comment to report that the pull request now passes
+ * the check. The server deliberately does not create a comment here, so a
+ * repository with comment-on-linked disabled keeps its no-comment behavior.
+ * @param {Object} options
+ * @param {typeof import('@actions/core')} options.core
+ * @param {typeof import('@actions/github').context} options.context
+ * @returns {Promise<void>}
+ */
+async function notifyPassed({ core, context }) {
+  const pullNumber = context.payload.pull_request?.number;
+
+  if (!pullNumber) {
+    core.info("Not updating the check comment: no pull request number in the event payload.");
+    return;
+  }
+
+  try {
+    await post({
+      core,
+      path: "github/pulls/passed",
+      body: { issue_number: pullNumber },
+    });
+  } catch (error) {
+    core.warning(`Could not update the check comment on pull request #${pullNumber}: ${error.message}`, { title: "Check comment failed" });
+    return;
+  }
+
+  core.info(`Updated pull request #${pullNumber} to report that the check passed.`);
+}
+
+/**
  * Updates the setup comment to report that the author did not satisfy the
  * rules, without closing the pull request. Used when close-on-failure is off,
  * so the failure still shows up on the pull request.
@@ -111,4 +142,4 @@ async function notifyRulesFailed({ core, context }) {
   core.info(`Updated pull request #${pullNumber} to report that the rules were not satisfied.`);
 }
 
-module.exports = { closePullRequest, notifyRulesFailed, openPullRequest };
+module.exports = { closePullRequest, notifyPassed, notifyRulesFailed, openPullRequest };

@@ -145,6 +145,66 @@ func (s *Server) handleGitHubPullRequestRulesFailed(w http.ResponseWriter, r *ht
 	s.writeJSON(w, http.StatusOK, struct{}{})
 }
 
+type passedRequest struct {
+	IssueNumber int64 `json:"issue_number"` // GitHub's API addresses PRs as issues.
+}
+
+// handleGitHubPullRequestPassed answers POST /v1/github/pulls/passed.
+func (s *Server) handleGitHubPullRequestPassed(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	claims, ok := s.verifyBearer(w, r)
+	if !ok {
+		return
+	}
+
+	var req passedRequest
+	if !s.decodeBody(w, r, &req) {
+		return
+	}
+
+	if req.IssueNumber == 0 {
+		s.writeProblem(w, r, http.StatusBadRequest, "issue_number is required")
+		return
+	}
+
+	s.notifyPassed(ctx, claims, req.IssueNumber)
+
+	s.writeJSON(w, http.StatusOK, struct{}{})
+}
+
+// notifyPassed records that the author now passes the check. It updates only
+// an existing setup comment: with comment-on-linked disabled, a passing run
+// must not start commenting on authors who never needed instructions.
+func (s *Server) notifyPassed(ctx context.Context, claims *github.Claims, issueNumber int64) {
+	if _, err := s.store.SetupCommentByPullRequest(ctx, claims.RepositoryID, issueNumber); err != nil {
+		if errors.Is(err, storage.ErrNotFound) {
+			return
+		}
+
+		s.logger.Error(
+			"looking up setup comment",
+			"error", err,
+			"repository", claims.Repository,
+			"issue_number", issueNumber,
+		)
+
+		return
+	}
+
+	if err := s.syncSetupComment(
+		ctx,
+		claims.RepositoryID,
+		claims.Repository,
+		issueNumber,
+		commentPassed,
+		"",
+		false,
+	); err != nil {
+		s.logSetupCommentError(err)
+	}
+}
+
 // notifyRulesFailed reconciles the setup comment to explain that the author did
 // not satisfy the rules.
 func (s *Server) notifyRulesFailed(ctx context.Context, claims *github.Claims, issueNumber int64) {
