@@ -68,7 +68,7 @@ func New(
 }
 
 func (s *Server) addRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("GET /v1/healthz", s.handleHealth)
+	mux.HandleFunc("GET /healthz", s.handleHealth)
 	mux.HandleFunc("POST /v1/discord/resolve", s.handleDiscordResolve)
 	mux.HandleFunc("POST /v1/discord/member", s.handleDiscordMember)
 	mux.HandleFunc("POST /v1/github/pulls/close", s.handleGitHubPullRequestClose)
