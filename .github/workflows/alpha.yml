@@ -9,7 +9,7 @@ permissions: {}
 
 concurrency:
   group: alpha
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   lint:
