@@ -1,8 +1,7 @@
 name: Resolve Discord link
 description: >-
   Resolve a GitHub user's Discord account through Arbiterer using GitHub OIDC. The calling job needs
-  `id-token: write`, and for fork pull requests the workflow must use `on: pull_request_target`. To let
-  authors re-run the check with `/arbiterer recheck`, also trigger on `issue_comment` with `types: [created]`.
+  `id-token: write` permission. Note: for pull requests from forks, the workflow must use `on: pull_request_target`.
 
 inputs:
   close-on-failure:

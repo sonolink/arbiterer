@@ -1,7 +1,6 @@
 const evaluateRules = require("./rules");
 const createMemberHelper = require("./member");
 const { closePullRequest, openPullRequest } = require("./pull-request");
-const { commandContext } = require("./commands");
 const post = require("./api");
 const commentOnLinked = process.env.ARBITERER_COMMENT_ON_LINKED?.trim().toLowerCase() !== "false";
 const closeOnFailure = process.env.ARBITERER_CLOSE_ON_FAILURE?.trim().toLowerCase() !== "false";
@@ -44,22 +43,8 @@ function exemptAssociations(core) {
  * @param {typeof import('@actions/github')} options.github
  * @returns {Promise<void>}
  */
-module.exports = async function resolve({ core, context: eventContext, github }) {
+module.exports = async function resolve({ core, context, github }) {
   const exempt = exemptAssociations(core);
-
-  let context = eventContext;
-  if (eventContext.eventName === "issue_comment") {
-    const command = await commandContext({ core, context: eventContext, github });
-    if (!command) {
-      return;
-    }
-
-    if (command.name !== "recheck") {
-      return;
-    }
-
-    context = command.context;
-  }
 
   if (context.eventName !== "pull_request" && context.eventName !== "pull_request_target") {
     core.info(`Skipping: event "${context.eventName}" is not a pull request.`);
