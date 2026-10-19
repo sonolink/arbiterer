@@ -1,5 +1,7 @@
-name: Preflight
-description: Check that an environment names a deploy host this run can reach.
+name: Run on host
+description: >-
+  Check that an environment names a deploy host this run can reach, put the
+  stack there, and run one of its scripts.
 
 inputs:
   environment:
@@ -19,11 +21,25 @@ inputs:
     description: Absolute path the stack is deployed to
     required: true
   key:
-    description: Private key to connect with, checked only for being set
+    description: Private key to connect with
     required: true
   fingerprint:
     description: Fingerprint the host is expected to offer
     required: true
+  token:
+    description: Token to read images from the registry with
+    required: true
+  script:
+    description: Script in deploy/ to run, such as deploy.sh
+    required: true
+  image:
+    description: Image the script should act on
+    required: false
+    default: ""
+  migrate:
+    description: Whether the script should apply pending migrations
+    required: false
+    default: "false"
 
 runs:
   using: composite
@@ -67,3 +83,38 @@ runs:
           printf '%s\n' "$keys" | awk '{print $2, $NF}'
           exit 1
         fi
+
+    - name: Upload the stack
+      uses: appleboy/scp-action@ff85246acaad7bdce478db94a363cd2bf7c90345 # v1.0.0
+      with:
+        host: ${{ inputs.host }}
+        port: ${{ inputs.port }}
+        username: ${{ inputs.user }}
+        key: ${{ inputs.key }}
+        fingerprint: ${{ inputs.fingerprint }}
+        source: deploy/compose.yml,deploy/${{ inputs.script }}
+        target: ${{ inputs.path }}
+        strip_components: 1
+
+    # The scripts take the same arguments, and ignore the ones they have no
+    # use for, so that this stays one call.
+    - name: Run ${{ inputs.script }}
+      uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2 # v1.2.5
+      env:
+        DEPLOY_PATH: ${{ inputs.path }}
+        SCRIPT: ${{ inputs.script }}
+        IMAGE: ${{ inputs.image }}
+        MIGRATE: ${{ inputs.migrate }}
+        GHCR_TOKEN: ${{ inputs.token }}
+        GHCR_ACTOR: ${{ github.actor }}
+      with:
+        host: ${{ inputs.host }}
+        port: ${{ inputs.port }}
+        username: ${{ inputs.user }}
+        key: ${{ inputs.key }}
+        fingerprint: ${{ inputs.fingerprint }}
+        envs: DEPLOY_PATH,SCRIPT,IMAGE,MIGRATE,GHCR_TOKEN,GHCR_ACTOR
+        script: |
+          set -eu
+          printf '%s' "$GHCR_TOKEN" | docker --config "$DEPLOY_PATH/.docker" login ghcr.io -u "$GHCR_ACTOR" --password-stdin
+          sh "$DEPLOY_PATH/$SCRIPT" "$DEPLOY_PATH" "$IMAGE" "$MIGRATE"

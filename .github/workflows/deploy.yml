@@ -52,21 +52,14 @@ jobs:
     concurrency:
       group: deploy-${{ inputs.environment }}
       cancel-in-progress: false
-    env:
-      DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
-      IMAGE: ${{ inputs.image }}
-      MIGRATE: ${{ inputs.migrate }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
 
-      # In this job rather than one of its own because a job that reads the
-      # environment's secrets is a job that asks for its approval, and one
-      # deploy should take only one.
-      - name: Preflight
-        uses: ./.github/actions/preflight
+      - name: Deploy
+        uses: ./.github/actions/run-on-host
         with:
           environment: ${{ inputs.environment }}
           host: ${{ secrets.DEPLOY_HOST }}
@@ -75,32 +68,7 @@ jobs:
           path: ${{ secrets.DEPLOY_PATH }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           fingerprint: ${{ secrets.DEPLOY_HOST_FINGERPRINT }}
-
-      - name: Upload compose and deploy script
-        uses: appleboy/scp-action@ff85246acaad7bdce478db94a363cd2bf7c90345 # v1.0.0
-        with:
-          host: ${{ secrets.DEPLOY_HOST }}
-          port: ${{ secrets.DEPLOY_PORT || '22' }}
-          username: ${{ secrets.DEPLOY_USER }}
-          key: ${{ secrets.DEPLOY_SSH_KEY }}
-          fingerprint: ${{ secrets.DEPLOY_HOST_FINGERPRINT }}
-          source: deploy/compose.yml,deploy/deploy.sh
-          target: ${{ env.DEPLOY_PATH }}
-          strip_components: 1
-
-      - name: Deploy
-        uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2 # v1.2.5
-        env:
-          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GHCR_ACTOR: ${{ github.actor }}
-        with:
-          host: ${{ secrets.DEPLOY_HOST }}
-          port: ${{ secrets.DEPLOY_PORT || '22' }}
-          username: ${{ secrets.DEPLOY_USER }}
-          key: ${{ secrets.DEPLOY_SSH_KEY }}
-          fingerprint: ${{ secrets.DEPLOY_HOST_FINGERPRINT }}
-          envs: DEPLOY_PATH,IMAGE,MIGRATE,GHCR_TOKEN,GHCR_ACTOR
-          script: |
-            set -eu
-            printf '%s' "$GHCR_TOKEN" | docker --config "$DEPLOY_PATH/.docker" login ghcr.io -u "$GHCR_ACTOR" --password-stdin
-            sh "$DEPLOY_PATH/deploy.sh" "$DEPLOY_PATH" "$IMAGE" "$MIGRATE"
+          token: ${{ secrets.GITHUB_TOKEN }}
+          script: deploy.sh
+          image: ${{ inputs.image }}
+          migrate: ${{ inputs.migrate }}
