@@ -32,6 +32,7 @@ services:
       GITHUB_CLIENT_PRIVATE_KEY_FILE: /run/secrets/github_client_private_key
       STORAGE_ENCRYPTION_KEY_FILE: /run/secrets/storage_encryption_key
       BROWSER_ENCRYPTION_KEY_FILE: /run/secrets/browser_encryption_key
+      GITHUB_WEBHOOK_SECRET_FILE: /run/secrets/github_webhook_secret
     secrets:
       - postgres_password
       - discord_client_secret
@@ -39,6 +40,7 @@ services:
       - github_client_private_key
       - storage_encryption_key
       - browser_encryption_key
+      - github_webhook_secret
     ports:
       - "127.0.0.1:${SERVER_PORT:-8080}:8080"
     healthcheck:
@@ -94,6 +96,8 @@ secrets:
     file: ${SECRETS_DIR:-./secrets}/storage_encryption_key.txt
   browser_encryption_key:
     file: ${SECRETS_DIR:-./secrets}/browser_encryption_key.txt
+  github_webhook_secret:
+    file: ${SECRETS_DIR:-./secrets}/github_webhook_secret.txt
 
 volumes:
   pg-data:
