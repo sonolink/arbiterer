@@ -68,6 +68,7 @@ func (c *Config) loadSecrets() error {
 		{"DISCORD_CLIENT_SECRET", &c.Discord.ClientSecret},
 		{"GITHUB_CLIENT_SECRET", &c.GitHub.ClientSecret},
 		{"GITHUB_CLIENT_PRIVATE_KEY", &c.GitHub.PrivateKey},
+		{"GITHUB_WEBHOOK_SECRET", &c.GitHub.WebhookSecret},
 		{"STORAGE_ENCRYPTION_KEY", &c.Secrets.StorageKey},
 		{"BROWSER_ENCRYPTION_KEY", &c.Secrets.BrowserKey},
 	}
@@ -232,6 +233,7 @@ type GitHub struct {
 	ClientID      string        `env:"GITHUB_CLIENT_ID,required"`
 	ClientSecret  Secret        `env:"-"`
 	PrivateKey    RSAPrivateKey `env:"-"`
+	WebhookSecret Secret        `env:"-"`
 	RedirectURI   string        `env:"GITHUB_REDIRECT_URI,required"`
 	OIDCAudience  string        `env:"GITHUB_OIDC_AUDIENCE,required"`
 	APIURL        string        `env:"GITHUB_API_URL"     envDefault:"https://api.github.com"`

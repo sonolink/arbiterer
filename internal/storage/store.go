@@ -33,6 +33,9 @@ var migrations embed.FS
 // ErrNotFound is returned when a query matches no rows.
 var ErrNotFound = errors.New("storage: not found")
 
+// ErrCooldown is returned when an operation is rate-limited by a cooldown.
+var ErrCooldown = errors.New("storage: cooldown active")
+
 // Store enables interaction with the postgres database.
 type Store struct {
 	pool *pgxpool.Pool

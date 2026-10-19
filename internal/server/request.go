@@ -46,18 +46,28 @@ func (s *Server) verifyBearer(w http.ResponseWriter, r *http.Request) (*github.C
 	return claims, true
 }
 
-// decodeBody reads a size-limited JSON request body into dst.
-func (s *Server) decodeBody(w http.ResponseWriter, r *http.Request, dst any) bool {
-	body, err := io.ReadAll(io.LimitReader(r.Body, maxRequestBytes+1))
+// readBody reads a request body no larger than limit.
+func (s *Server) readBody(w http.ResponseWriter, r *http.Request, limit int64) ([]byte, bool) {
+	body, err := io.ReadAll(io.LimitReader(r.Body, limit+1))
 	if err != nil {
 		s.writeProblem(w, r, http.StatusBadRequest, "reading request body")
 
-		return false
+		return nil, false
 	}
 
-	if len(body) > maxRequestBytes {
+	if int64(len(body)) > limit {
 		s.writeProblem(w, r, http.StatusRequestEntityTooLarge, "request body too large")
 
+		return nil, false
+	}
+
+	return body, true
+}
+
+// decodeBody reads a size-limited JSON request body into dst.
+func (s *Server) decodeBody(w http.ResponseWriter, r *http.Request, dst any) bool {
+	body, ok := s.readBody(w, r, maxRequestBytes)
+	if !ok {
 		return false
 	}
 

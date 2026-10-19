@@ -25,6 +25,7 @@ services:
       DISCORD_CLIENT_SECRET_FILE: /run/secrets/discord_client_secret
       GITHUB_CLIENT_SECRET_FILE: /run/secrets/github_client_secret
       GITHUB_CLIENT_PRIVATE_KEY_FILE: /run/secrets/github_client_private_key
+      GITHUB_WEBHOOK_SECRET_FILE: /run/secrets/github_webhook_secret
       STORAGE_ENCRYPTION_KEY_FILE: /run/secrets/storage_encryption_key
       BROWSER_ENCRYPTION_KEY_FILE: /run/secrets/browser_encryption_key
     secrets:
@@ -32,6 +33,7 @@ services:
       - discord_client_secret
       - github_client_secret
       - github_client_private_key
+      - github_webhook_secret
       - storage_encryption_key
       - browser_encryption_key
     ports:
@@ -80,6 +82,8 @@ secrets:
     file: ${SECRETS_DIR:-./secrets}/github_client_secret.txt
   github_client_private_key:
     file: ${SECRETS_DIR:-./secrets}/github_client_private_key.txt
+  github_webhook_secret:
+    file: ${SECRETS_DIR:-./secrets}/github_webhook_secret.txt
   storage_encryption_key:
     file: ${SECRETS_DIR:-./secrets}/storage_encryption_key.txt
   browser_encryption_key:

@@ -147,6 +147,22 @@ func (c *Client) OpenPullRequest(ctx context.Context, token, repo string, issueN
 	return err
 }
 
+// RerunWorkflowRun asks GitHub to re-run a whole workflow run.
+func (c *Client) RerunWorkflowRun(ctx context.Context, token, repo string, runID int64) error {
+	if err := c.sendRequest(
+		ctx,
+		http.MethodPost,
+		fmt.Sprintf("/repos/%s/actions/runs/%d/rerun", repo, runID),
+		token,
+		map[string]any{},
+		nil,
+	); err != nil {
+		return fmt.Errorf("github: rerunning workflow run %d: %w", runID, err)
+	}
+
+	return nil
+}
+
 // RerunJob asks GitHub to re-run a single workflow job.
 func (c *Client) RerunJob(ctx context.Context, token, repo string, jobID int64) error {
 	if err := c.sendRequest(

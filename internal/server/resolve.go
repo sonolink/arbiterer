@@ -429,9 +429,37 @@ func (s *Server) handleDiscordResolve(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	s.recordPullRequestRun(ctx, claims, req.IssueNumber)
 	s.recordPendingRerun(ctx, claims, req.IssueNumber, resp.Status)
 
 	s.writeJSON(w, http.StatusOK, resp)
+}
+
+// recordPullRequestRun remembers the run that verified the pull request, so a
+// later /arbiterer recheck can rerun it.
+func (s *Server) recordPullRequestRun(
+	ctx context.Context,
+	claims *github.Claims,
+	issueNumber int64,
+) {
+	if issueNumber == 0 || claims.RunID == 0 {
+		return
+	}
+
+	if err := s.store.UpsertPullRequestRun(
+		ctx,
+		claims.RepositoryID,
+		issueNumber,
+		claims.RunID,
+	); err != nil {
+		s.logger.Error(
+			"recording pull request run",
+			"error", err,
+			"repository", claims.Repository,
+			"issue_number", issueNumber,
+			"run_id", claims.RunID,
+		)
+	}
 }
 
 // recordPendingRerun stores the job to re-run once an unlinked author links, or
