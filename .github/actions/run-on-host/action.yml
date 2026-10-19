@@ -1,0 +1,120 @@
+name: Run on host
+description: >-
+  Check that an environment names a deploy host this run can reach, put the
+  stack there, and run one of its scripts.
+
+inputs:
+  environment:
+    description: Name of the environment, for the error messages
+    required: true
+  host:
+    description: Hostname or address of the deploy host
+    required: true
+  port:
+    description: SSH port of the deploy host
+    required: false
+    default: "22"
+  user:
+    description: User to connect as
+    required: true
+  path:
+    description: Absolute path the stack is deployed to
+    required: true
+  key:
+    description: Private key to connect with
+    required: true
+  fingerprint:
+    description: Fingerprint the host is expected to offer
+    required: true
+  token:
+    description: Token to read images from the registry with
+    required: true
+  script:
+    description: Script in deploy/ to run, such as deploy.sh
+    required: true
+  image:
+    description: Image the script should act on
+    required: false
+    default: ""
+  migrate:
+    description: Whether the script should apply pending migrations
+    required: false
+    default: "false"
+
+runs:
+  using: composite
+  steps:
+    - name: Check secrets
+      shell: bash
+      env:
+        ENVIRONMENT: ${{ inputs.environment }}
+        HOST: ${{ inputs.host }}
+        LOGIN: ${{ inputs.user }}
+        DEPLOY_PATH: ${{ inputs.path }}
+        SSH_KEY: ${{ inputs.key }}
+        FINGERPRINT: ${{ inputs.fingerprint }}
+      run: |
+        if [ -z "$SSH_KEY" ] || [ -z "$FINGERPRINT" ] || [ -z "$HOST" ] || [ -z "$LOGIN" ] || [ -z "$DEPLOY_PATH" ]; then
+          echo "::error::DEPLOY_SSH_KEY, DEPLOY_HOST_FINGERPRINT, DEPLOY_HOST, DEPLOY_USER or DEPLOY_PATH is not set for the $ENVIRONMENT environment"
+          exit 1
+        fi
+        case "$DEPLOY_PATH" in
+          /*) ;;
+          *) echo "::error::DEPLOY_PATH must be an absolute path"; exit 1 ;;
+        esac
+
+    # appleboy verifies the fingerprint when it connects. This runs first so
+    # that a key changed by a host rebuild is reported with the keys the host
+    # now offers, rather than as a failed handshake.
+    - name: Verify host fingerprint
+      shell: bash
+      env:
+        HOST: ${{ inputs.host }}
+        PORT: ${{ inputs.port }}
+        FINGERPRINT: ${{ inputs.fingerprint }}
+      run: |
+        keys=$(ssh-keyscan -T 10 -p "$PORT" -t ecdsa,ed25519,rsa "$HOST" 2>/dev/null | ssh-keygen -lf -) || true
+        if [ -z "$keys" ]; then
+          echo "::error::could not read the host keys of the deploy host (check DEPLOY_HOST and DEPLOY_PORT)"
+          exit 1
+        fi
+        if ! printf '%s\n' "$keys" | grep -qF -- "$FINGERPRINT"; then
+          echo "::error::DEPLOY_HOST_FINGERPRINT matches none of the host's keys, it offers:"
+          printf '%s\n' "$keys" | awk '{print $2, $NF}'
+          exit 1
+        fi
+
+    - name: Upload the stack
+      uses: appleboy/scp-action@ff85246acaad7bdce478db94a363cd2bf7c90345 # v1.0.0
+      with:
+        host: ${{ inputs.host }}
+        port: ${{ inputs.port }}
+        username: ${{ inputs.user }}
+        key: ${{ inputs.key }}
+        fingerprint: ${{ inputs.fingerprint }}
+        source: deploy/compose.yml,deploy/${{ inputs.script }}
+        target: ${{ inputs.path }}
+        strip_components: 1
+
+    # The scripts take the same arguments, and ignore the ones they have no
+    # use for, so that this stays one call.
+    - name: Run ${{ inputs.script }}
+      uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2 # v1.2.5
+      env:
+        DEPLOY_PATH: ${{ inputs.path }}
+        SCRIPT: ${{ inputs.script }}
+        IMAGE: ${{ inputs.image }}
+        MIGRATE: ${{ inputs.migrate }}
+        GHCR_TOKEN: ${{ inputs.token }}
+        GHCR_ACTOR: ${{ github.actor }}
+      with:
+        host: ${{ inputs.host }}
+        port: ${{ inputs.port }}
+        username: ${{ inputs.user }}
+        key: ${{ inputs.key }}
+        fingerprint: ${{ inputs.fingerprint }}
+        envs: DEPLOY_PATH,SCRIPT,IMAGE,MIGRATE,GHCR_TOKEN,GHCR_ACTOR
+        script: |
+          set -eu
+          printf '%s' "$GHCR_TOKEN" | docker --config "$DEPLOY_PATH/.docker" login ghcr.io -u "$GHCR_ACTOR" --password-stdin
+          sh "$DEPLOY_PATH/$SCRIPT" "$DEPLOY_PATH" "$IMAGE" "$MIGRATE"

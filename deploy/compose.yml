@@ -1,0 +1,99 @@
+name: ${COMPOSE_PROJECT_NAME:?set COMPOSE_PROJECT_NAME in .env}
+
+x-app: &app
+  image: ${ARBITERER_IMAGE:?ARBITERER_IMAGE is not set, pass --env-file deploy.env}
+  group_add:
+    - "${SECRETS_GID:?set SECRETS_GID in .env to the group that owns the secret files}"
+  env_file:
+    - ./.env
+
+x-app-env: &app-env
+  POSTGRES_HOST: postgres
+  POSTGRES_PORT: "5432"
+  POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+
+x-logging: &logging
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "3"
+
+services:
+  server:
+    <<: [*app, *logging]
+    restart: unless-stopped
+    environment:
+      <<: *app-env
+      SERVER_HOST: 0.0.0.0
+      SERVER_PORT: "8080"
+      DISCORD_CLIENT_SECRET_FILE: /run/secrets/discord_client_secret
+      GITHUB_CLIENT_SECRET_FILE: /run/secrets/github_client_secret
+      GITHUB_CLIENT_PRIVATE_KEY_FILE: /run/secrets/github_client_private_key
+      STORAGE_ENCRYPTION_KEY_FILE: /run/secrets/storage_encryption_key
+      BROWSER_ENCRYPTION_KEY_FILE: /run/secrets/browser_encryption_key
+    secrets:
+      - postgres_password
+      - discord_client_secret
+      - github_client_secret
+      - github_client_private_key
+      - storage_encryption_key
+      - browser_encryption_key
+    ports:
+      - "127.0.0.1:${SERVER_PORT:-8080}:8080"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8080/v1/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  migrator:
+    <<: [*app, *logging]
+    profiles: [migrate]
+    entrypoint: ["arbiterer", "migrate"]
+    environment:
+      <<: *app-env
+    secrets:
+      - postgres_password
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  postgres:
+    <<: *logging
+    image: postgres:18.6-alpine
+    restart: unless-stopped
+    env_file:
+      - ./.env
+    environment:
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+    secrets:
+      - postgres_password
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-postgres}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - pg-data:/var/lib/postgresql
+
+secrets:
+  postgres_password:
+    file: ${SECRETS_DIR:-./secrets}/postgres_password.txt
+  discord_client_secret:
+    file: ${SECRETS_DIR:-./secrets}/discord_client_secret.txt
+  github_client_secret:
+    file: ${SECRETS_DIR:-./secrets}/github_client_secret.txt
+  github_client_private_key:
+    file: ${SECRETS_DIR:-./secrets}/github_client_private_key.txt
+  storage_encryption_key:
+    file: ${SECRETS_DIR:-./secrets}/storage_encryption_key.txt
+  browser_encryption_key:
+    file: ${SECRETS_DIR:-./secrets}/browser_encryption_key.txt
+
+volumes:
+  pg-data:

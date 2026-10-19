@@ -1,0 +1,82 @@
+name: Promote image
+
+on:
+  workflow_call:
+    inputs:
+      tags:
+        required: true
+        type: string
+    outputs:
+      image:
+        value: ${{ jobs.promote.outputs.image }}
+
+permissions: {}
+
+jobs:
+  promote:
+    name: Retag
+    permissions:
+      contents: read
+      packages: write
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      image: ${{ steps.source.outputs.image }}
+    steps:
+      - name: Log in to GHCR
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # The image exists only because alpha built it, and alpha builds only
+      # after lint and tests pass. Its absence means this commit was never
+      # deployed, so there is nothing to promote.
+      - name: Find the image alpha built
+        id: source
+        run: |
+          repository=ghcr.io/${GITHUB_REPOSITORY,,}
+          if ! digest=$(docker buildx imagetools inspect "$repository:sha-$GITHUB_SHA" --format '{{.Manifest.Digest}}' 2>/dev/null); then
+            echo "::error::no image for $GITHUB_SHA, deploy the commit to alpha before releasing it"
+            exit 1
+          fi
+
+          echo "repository=$repository" >> "$GITHUB_OUTPUT"
+          echo "image=$repository@$digest" >> "$GITHUB_OUTPUT"
+
+      - name: Metadata
+        id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6
+        with:
+          images: ${{ steps.source.outputs.repository }}
+          flavor: latest=false
+          tags: ${{ inputs.tags }}
+
+      # imagetools retags in the registry, so the release carries the digest
+      # alpha ran rather than a rebuild of the same source.
+      - name: Retag
+        env:
+          IMAGE: ${{ steps.source.outputs.image }}
+          TAGS: ${{ steps.meta.outputs.tags }}
+        run: |
+          set --
+          for tag in $TAGS; do
+            set -- "$@" --tag "$tag"
+          done
+
+          docker buildx imagetools create "$@" "$IMAGE"
+
+      - name: Check the tags point at it
+        env:
+          IMAGE: ${{ steps.source.outputs.image }}
+          TAGS: ${{ steps.meta.outputs.tags }}
+        run: |
+          want=${IMAGE##*@}
+          for tag in $TAGS; do
+            got=$(docker buildx imagetools inspect "$tag" --format '{{.Manifest.Digest}}')
+            if [ "$got" != "$want" ]; then
+              echo "::error::$tag is $got, want $want"
+              exit 1
+            fi
+          done

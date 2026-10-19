@@ -1,0 +1,50 @@
+name: Deploy to alpha
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions: {}
+
+concurrency:
+  group: alpha
+  cancel-in-progress: false
+
+jobs:
+  lint:
+    name: Lint
+    permissions:
+      contents: read
+    uses: ./.github/workflows/lint.yml
+
+  test:
+    name: Test
+    permissions:
+      contents: read
+    uses: ./.github/workflows/test.yml
+
+  image:
+    name: Image
+    needs: [lint, test]
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/build-image.yml
+    with:
+      tags: |
+        type=sha,format=long
+        type=raw,value=alpha
+
+  deploy:
+    name: Deploy
+    needs: [image]
+    permissions:
+      contents: read
+      packages: read
+    uses: ./.github/workflows/deploy.yml
+    secrets: inherit
+    with:
+      environment: alpha
+      image: ${{ needs.image.outputs.image }}
+      migrate: true

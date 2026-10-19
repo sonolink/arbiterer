@@ -1,0 +1,74 @@
+name: Deploy
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        required: true
+        type: string
+      image:
+        required: true
+        type: string
+      migrate:
+        description: Apply pending migrations before starting the new image
+        required: false
+        default: false
+        type: boolean
+
+  # The quickest way back from a bad release. Reverting and releasing again
+  # reaches the same place, but takes the whole pipeline to get there.
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Environment to deploy to
+        required: true
+        type: choice
+        options:
+          - alpha
+          - production
+      image:
+        description: Image to deploy, such as ghcr.io/sonolink/arbiterer:1.0.2
+        required: true
+        type: string
+      migrate:
+        description: Apply pending migrations before starting it
+        required: false
+        default: false
+        type: boolean
+
+permissions: {}
+
+jobs:
+  deploy:
+    name: Compose
+    permissions:
+      contents: read
+      packages: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: ${{ inputs.environment }}
+      url: ${{ vars.PUBLIC_URL }}
+    concurrency:
+      group: deploy-${{ inputs.environment }}
+      cancel-in-progress: false
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Deploy
+        uses: ./.github/actions/run-on-host
+        with:
+          environment: ${{ inputs.environment }}
+          host: ${{ secrets.DEPLOY_HOST }}
+          port: ${{ secrets.DEPLOY_PORT || '22' }}
+          user: ${{ secrets.DEPLOY_USER }}
+          path: ${{ secrets.DEPLOY_PATH }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          fingerprint: ${{ secrets.DEPLOY_HOST_FINGERPRINT }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          script: deploy.sh
+          image: ${{ inputs.image }}
+          migrate: ${{ inputs.migrate }}
