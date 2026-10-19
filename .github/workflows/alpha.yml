@@ -1,11 +1,15 @@
-name: Alpha
+name: Deploy to alpha
 
 on:
   workflow_dispatch:
   push:
-    branches: [alpha]
+    branches: [main]
 
 permissions: {}
+
+concurrency:
+  group: alpha
+  cancel-in-progress: true
 
 jobs:
   preflight:
@@ -19,14 +23,12 @@ jobs:
 
   lint:
     name: Lint
-    needs: [preflight]
     permissions:
       contents: read
     uses: ./.github/workflows/lint.yml
 
   test:
     name: Test
-    needs: [preflight]
     permissions:
       contents: read
     uses: ./.github/workflows/test.yml
@@ -54,3 +56,4 @@ jobs:
     with:
       environment: alpha
       image: ${{ needs.image.outputs.image }}
+      migrate: true

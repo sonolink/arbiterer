@@ -55,43 +55,24 @@ jobs:
     secrets: inherit
     with:
       environment: production
-      release-app: true
-
-  # Lint and tests already ran on the PR and on the push to main, but are run
-  # again here on purpose: if a maintainer tags a release without noticing a
-  # failing main, nothing reaches production.
-  test:
-    name: Test
-    needs: [prepare, preflight]
-    permissions:
-      contents: read
-    uses: ./.github/workflows/test.yml
-
-  lint:
-    name: Lint
-    needs: [prepare, preflight]
-    permissions:
-      contents: read
-    uses: ./.github/workflows/lint.yml
 
   image:
     name: Image
-    needs: [prepare, preflight, lint, test]
+    needs: [prepare]
     permissions:
       contents: read
       packages: write
-    uses: ./.github/workflows/build-image.yml
+    uses: ./.github/workflows/promote-image.yml
     with:
       tags: |
         type=semver,pattern={{version}}
         type=semver,pattern={{major}}.{{minor}}
         type=semver,pattern={{major}},enable=${{ needs.prepare.outputs.latest_in_major }}
         type=raw,value=latest,enable=${{ needs.prepare.outputs.latest }}
-        type=sha,format=long
 
   deploy:
     name: Deploy
-    needs: [image]
+    needs: [image, preflight]
     permissions:
       contents: read
       packages: read
@@ -105,7 +86,7 @@ jobs:
     name: Publish
     needs: [prepare, deploy]
     permissions:
-      contents: read
+      contents: write
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -114,17 +95,9 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Create app token
-        id: app
-        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
-        with:
-          client-id: ${{ secrets.APP_CLIENT_ID }}
-          private-key: ${{ secrets.APP_PRIVATE_KEY }}
-          permission-contents: write
-
       - name: Create release
         env:
-          GH_TOKEN: ${{ steps.app.outputs.token }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           LATEST: ${{ needs.prepare.outputs.latest }}
         run: |
           sh .github/scripts/release-notes.sh "${GITHUB_REF_NAME#v}" > notes.md
@@ -133,7 +106,7 @@ jobs:
       - name: Move tag
         if: needs.prepare.outputs.latest_in_major == 'true'
         env:
-          GH_TOKEN: ${{ steps.app.outputs.token }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           major=${GITHUB_REF_NAME%%.*}
           if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$major" >/dev/null 2>&1; then

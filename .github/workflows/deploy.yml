@@ -9,6 +9,32 @@ on:
       image:
         required: true
         type: string
+      migrate:
+        description: Apply pending migrations before starting the new image
+        required: false
+        default: false
+        type: boolean
+
+  # The quickest way back from a bad release. Reverting and releasing again
+  # reaches the same place, but takes the whole pipeline to get there.
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Environment to deploy to
+        required: true
+        type: choice
+        options:
+          - alpha
+          - production
+      image:
+        description: Image to deploy, such as ghcr.io/sonolink/arbiterer:1.0.2
+        required: true
+        type: string
+      migrate:
+        description: Apply pending migrations before starting it
+        required: false
+        default: false
+        type: boolean
 
 permissions: {}
 
@@ -29,6 +55,7 @@ jobs:
     env:
       DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
       IMAGE: ${{ inputs.image }}
+      MIGRATE: ${{ inputs.migrate }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -58,8 +85,8 @@ jobs:
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           fingerprint: ${{ secrets.DEPLOY_HOST_FINGERPRINT }}
-          envs: DEPLOY_PATH,IMAGE,GHCR_TOKEN,GHCR_ACTOR
+          envs: DEPLOY_PATH,IMAGE,MIGRATE,GHCR_TOKEN,GHCR_ACTOR
           script: |
             set -eu
             printf '%s' "$GHCR_TOKEN" | docker --config "$DEPLOY_PATH/.docker" login ghcr.io -u "$GHCR_ACTOR" --password-stdin
-            sh "$DEPLOY_PATH/deploy.sh" "$DEPLOY_PATH" "$IMAGE"
+            sh "$DEPLOY_PATH/deploy.sh" "$DEPLOY_PATH" "$IMAGE" "$MIGRATE"

@@ -6,11 +6,6 @@ on:
       environment:
         required: true
         type: string
-      release-app:
-        description: Also check that the release GitHub App can create a token for this repository
-        required: false
-        default: false
-        type: boolean
 
 permissions: {}
 
@@ -40,6 +35,9 @@ jobs:
             *) echo "::error::DEPLOY_PATH must be an absolute path"; exit 1 ;;
           esac
 
+      # appleboy verifies the fingerprint when it connects. This runs first so
+      # that a key changed by a host rebuild is reported with the keys the host
+      # now offers, rather than as a failed handshake later on.
       - name: Verify host fingerprint
         env:
           FINGERPRINT: ${{ secrets.DEPLOY_HOST_FINGERPRINT }}
@@ -56,22 +54,3 @@ jobs:
             printf '%s\n' "$keys" | awk '{print $2, $NF}'
             exit 1
           fi
-
-      - name: Check release app values
-        if: inputs.release-app
-        env:
-          CLIENT_ID: ${{ secrets.APP_CLIENT_ID }}
-          PRIVATE_KEY: ${{ secrets.APP_PRIVATE_KEY }}
-        run: |
-          if [ -z "$CLIENT_ID" ] || [ -z "$PRIVATE_KEY" ]; then
-            echo "::error::APP_CLIENT_ID or APP_PRIVATE_KEY is not set"
-            exit 1
-          fi
-
-      - name: Create release app token
-        if: inputs.release-app
-        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
-        with:
-          client-id: ${{ secrets.APP_CLIENT_ID }}
-          private-key: ${{ secrets.APP_PRIVATE_KEY }}
-          permission-contents: write
