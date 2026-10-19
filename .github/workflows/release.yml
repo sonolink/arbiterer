@@ -46,16 +46,6 @@ jobs:
       - name: Check changelog
         run: sh .github/scripts/release-notes.sh "${GITHUB_REF_NAME#v}"
 
-  preflight:
-    name: Preflight
-    needs: [prepare]
-    permissions:
-      contents: read
-    uses: ./.github/workflows/preflight.yml
-    secrets: inherit
-    with:
-      environment: production
-
   image:
     name: Image
     needs: [prepare]
@@ -72,7 +62,7 @@ jobs:
 
   deploy:
     name: Deploy
-    needs: [image, preflight]
+    needs: [image]
     permissions:
       contents: read
       packages: read

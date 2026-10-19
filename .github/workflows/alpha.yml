@@ -12,15 +12,6 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  preflight:
-    name: Preflight
-    permissions:
-      contents: read
-    uses: ./.github/workflows/preflight.yml
-    secrets: inherit
-    with:
-      environment: alpha
-
   lint:
     name: Lint
     permissions:
@@ -35,7 +26,7 @@ jobs:
 
   image:
     name: Image
-    needs: [preflight, lint, test]
+    needs: [lint, test]
     permissions:
       contents: read
       packages: write

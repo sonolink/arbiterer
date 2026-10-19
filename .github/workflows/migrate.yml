@@ -18,18 +18,8 @@ on:
 permissions: {}
 
 jobs:
-  preflight:
-    name: Preflight
-    permissions:
-      contents: read
-    uses: ./.github/workflows/preflight.yml
-    secrets: inherit
-    with:
-      environment: ${{ inputs.environment }}
-
   migrate:
     name: Migrate
-    needs: [preflight]
     permissions:
       contents: read
       packages: read
@@ -49,6 +39,17 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
+
+      - name: Preflight
+        uses: ./.github/actions/preflight
+        with:
+          environment: ${{ inputs.environment }}
+          host: ${{ secrets.DEPLOY_HOST }}
+          port: ${{ secrets.DEPLOY_PORT || '22' }}
+          user: ${{ secrets.DEPLOY_USER }}
+          path: ${{ secrets.DEPLOY_PATH }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          fingerprint: ${{ secrets.DEPLOY_HOST_FINGERPRINT }}
 
       - name: Upload compose and migrate script
         uses: appleboy/scp-action@ff85246acaad7bdce478db94a363cd2bf7c90345 # v1.0.0
