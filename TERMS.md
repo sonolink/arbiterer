@@ -2,49 +2,61 @@
 
 Effective date: October 19, 2026
 
-Applies to: the hosted Service, including the linking flow at `arbiterer.com` and the API at `api.arbiterer.com`, the App, and the Action when it connects to the hosted Service.
+Applies to: the Service, including the linking flow at `arbiterer.com` and the API at `api.arbiterer.com`, the App, and the Action when it connects to the Service.
 Related: [Privacy Policy](https://github.com/sonolink/arbiterer/blob/main/PRIVACY.md) · [Security Policy](https://github.com/sonolink/arbiterer/blob/main/.github/SECURITY.md)
 
 ## 1. Agreement to these Terms
 
-By installing the App, using the Action with the hosted Service, or linking accounts, you agree to these Terms and our [Privacy Policy](https://github.com/sonolink/arbiterer/blob/main/PRIVACY.md).
+By installing the App, using the Action with the Service, or linking accounts, you agree to these Terms and our [Privacy Policy](https://github.com/sonolink/arbiterer/blob/main/PRIVACY.md).
 If you do not agree, do not use the Service.
 These Terms are between you and the SonoLink Development Team ("SonoLink", "we", "us").
-If you only open a pull request without linking accounts, the repository's Maintainer is responsible for telling you that the repository uses Arbiterer.
+If you only open a Contribution without linking accounts, the repository's Maintainer is responsible for telling you that the repository uses Arbiterer.
 
 ## 2. Definitions
 
 In these Terms:
-- **Service:** the hosted Arbiterer Service, including the App, the linking flow at `arbiterer.com`, the API at `api.arbiterer.com`, and the Action when it connects to the hosted Service.
+
+- **Service (or hosted Service):** the hosted Arbiterer service, made up of the App, the linking flow at `arbiterer.com`, the API at `api.arbiterer.com`, and the Action when it connects to the Service.
 - **App:** the Arbiterer GitHub App.
-- **Action:** the `sonolink/arbiterer` GitHub Action.
+- **Action:** the `sonolink/arbiterer` GitHub Action, run through GitHub Actions.
+- **GitHub:** the GitHub platform and services operated by GitHub, Inc. or its affiliates.
+- **Discord:** the Discord platform and services operated by Discord Inc. or its affiliates.
+- **GitHub Actions:** GitHub's service for running automated workflows, including the workflow that runs the Action.
+- **linking flow:** the account-linking flow at `arbiterer.com`, where you sign in with GitHub and then authorize Discord.
+- **account:** a GitHub account or a Discord account, as the context requires.
 - **Maintainer:** a person or organization that installs the App or configures the Action on a repository.
-- **Contributor:** a person who opens a pull request on a repository that uses the Service, or who links accounts through the Service.
+- **Contribution:** a pull request submitted to a repository that uses the Service.
+- **Contributor:** a person who makes a Contribution, or who links accounts through the Service.
 - **Rules:** JavaScript configured by a Maintainer in the Action to decide whether a Contributor passes.
-- **Self-hosted copy:** a copy of the open-source code run by someone other than us.
+- **check:** the pass, fail, or not-linked result the Action reports for a Contribution.
+- **Discord server:** a server (guild) on Discord; "our Discord server" means the community server linked in the Contact section.
+- **code:** the open-source code in the Arbiterer repository.
+- **Self-hosted copy:** a copy of the code run by someone other than us.
 - **Terms:** these Terms of Service.
 
 ## 3. Eligibility
 
 You must be at least 13 years old, or the minimum age required in your country, and old enough to use GitHub and Discord under their terms, whichever is higher.
 You must comply with GitHub's and Discord's terms and policies.
-If you use the Service for an organization, you must have authority to bind it.
+You must have the legal capacity to agree to these Terms in your jurisdiction, and, if you use the Service for or on behalf of an organization or other legal entity, the authority to bind it.
+
+You may not use the Service if you are located in, organized under the laws of, or ordinarily resident in a country or territory subject to comprehensive sanctions, if you are listed on a restricted-party list, or if your use would violate applicable export control or sanctions laws.
 
 ## 4. The Service
 
 Arbiterer links a Contributor's GitHub account to a Discord account for a repository.
-When a pull request is opened, the Action asks our API whether the author is linked, runs the Maintainer's Rules against the Discord data, and reports the result as a check.
+When a Contribution is opened, the Action asks our API whether the author is linked, runs the Maintainer's Rules against the Discord data, and reports the result as a check.
 
-On repositories where the App is installed, it may read pull request metadata, post and edit its own comments, rerun the Action job after linking, and, if the Maintainer enables it, close and reopen pull requests.
+On repositories where the App is installed, it may read Contribution metadata, post and edit its own comments, rerun the Action job after linking, and, if the Maintainer enables it, close and reopen Contributions.
 
 Linking shows that the same browser session authorized both accounts.
 It does not verify your real-world identity, and Arbiterer is not an identity verification, background-check, or consumer-reporting service.
 
-The hosted Service is free for now.
+The Service is free for now.
 We may add limits or paid features, or change the Service, with notice where practical.
-The source code is open source under the Apache License 2.0.
+The code is open source under the Apache License 2.0.
 That license governs your use of the code.
-These Terms govern your use of the hosted Service.
+These Terms govern your use of the Service.
 If you run a Self-hosted copy, these Terms do not apply to it and you are responsible for it.
 
 Arbiterer is not affiliated with or endorsed by GitHub or Discord.
@@ -57,7 +69,7 @@ See [LICENSE](https://github.com/sonolink/arbiterer/blob/main/LICENSE).
 These Terms do not limit any rights you have under that license for the code.
 If these Terms conflict with the license about the code, the license controls.
 
-The Arbiterer name, logo, and the hosted Service's content, apart from your data and the open-source code, belong to SonoLink or its licensors.
+The Arbiterer name, logo, and the Service's content, apart from your data and the code, belong to SonoLink or its licensors.
 You may not use our trademarks without permission, except as allowed by law.
 GitHub and Discord names and logos belong to their owners.
 If you send us feedback or suggestions, you give us a non-exclusive, worldwide, royalty-free license to use them to improve the Service.
@@ -74,10 +86,10 @@ Rules must be lawful and relevant to the repository, including under discriminat
 
 ### 6.2 Use of Discord data
 
-You must use the Discord data your workflow receives only to decide on pull requests and operate the Service.
+You must use the Discord data your workflow receives only to decide on Contributions and operate the Service.
 Do not store, publish, sell, or share it for advertising, tracking, or any other purpose, except as required by law or to enforce these Terms.
 Do not use `resolveMember` to query servers unrelated to your repository or community, or to track Contributors across servers; the Service does not verify that the server you request is related to the repository.
-Do not use the Service to read Discord data for anyone other than the pull request author you are checking.
+Do not use the Service to read Discord data for anyone other than the Contribution author you are checking.
 Do not print Discord profile or member data to workflow logs.
 On public repositories, Actions logs are public.
 
@@ -87,21 +99,23 @@ Tell Contributors that the repository uses Arbiterer and link to the [Privacy Po
 
 ### 6.4 Workflow security
 
-Configure the workflow safely.
-`pull_request_target` is required for the Action to work on pull requests from forks, and it runs with the base repository's permissions and secrets.
+You configure and control the workflow, and its security is your responsibility.
+`pull_request_target` is required for the Action to work on Contributions from forks, and it runs with the base repository's permissions and secrets.
 Never check out or run untrusted pull request code in a `pull_request_target` workflow.
 Do not put secrets in the environment Rules can read.
 Grant only the permissions the workflow needs, including `id-token: write` for the Action.
+To the maximum extent permitted by law, we are not responsible for losses caused by an incorrectly configured workflow, including exposed secrets or tokens, execution of untrusted code, or overly broad permissions.
 
 ### 6.5 Rules security
 
-Rules are arbitrary JavaScript that runs in your GitHub Actions runner with access to `require`, the `github` client, and the workflow environment, including `process.env`.
+Rules run in your GitHub Actions runner, not ours, so reviewing and running them safely is your responsibility.
+Rules are arbitrary JavaScript with access to `require`, the `github` client, and the workflow environment, including `process.env`.
 Only run Rules you trust and review them before use.
-Untrusted Rules can access the workflow's token, secrets, and the runner.
+Untrusted Rules can access the workflow's token, secrets, and the runner, and §13 limits our liability for losses they cause.
 
 ### 6.6 Account security
 
-By using Arbiterer you agree to Secure the App installation, repository settings, workflow files, and any tokens or secrets you use in respect to the operation and communication with Arbiterer, and you agree to take full responsibility for any problem, issue, mistake, security breach, or other incident resulting partially or entirely from your failure to do so.
+By using Arbiterer, you agree to secure the App installation, repository settings, workflow files, and any tokens or secrets used to operate or communicate with Arbiterer, and to take full responsibility for any problem, issue, mistake, security breach, or other incident resulting partly or entirely from your failure to do so.
 
 ### 6.7 Ending use
 
@@ -134,15 +148,17 @@ If you are a Contributor, you are responsible for the following.
 ## 8. Acceptable use
 
 You must not:
+
 - link or try to link an account you do not own, or impersonate another person;
-- use the Service to harass, discriminate against, track, or profile anyone, or to collect Discord data for any purpose other than gating pull requests;
+- use the Service to harass, discriminate against, track, or profile anyone, or to collect Discord data for any purpose other than gating Contributions;
 - use `resolveMember` or the Service to query Discord servers unrelated to the repository or community, or to build a database of Discord memberships;
 - access, or try to access, another repository's links or data, or another person's account;
 - attack, overload, probe, scan, or circumvent the Service's security, authentication, rate limits, or access controls;
 - introduce malicious code, including malicious Rules, or try to take tokens, secrets, or other users' data;
 - use the Service to make decisions that have legal or similarly significant effects about individuals, such as decisions about employment, housing, credit, healthcare, or insurance, or in a way that violates the law;
 - use the Service in a way that violates GitHub's or Discord's terms or policies;
-- misrepresent your affiliation with SonoLink, GitHub, or Discord.
+- misrepresent your affiliation with SonoLink, GitHub, or Discord;
+- use the Service in violation of applicable export control or sanctions laws.
 
 ## 9. Third-party services
 
@@ -153,9 +169,9 @@ The Service may link to third-party sites, and we are not responsible for them.
 
 ## 10. Privacy
 
-Our [Privacy Policy](https://github.com/sonolink/arbiterer/blob/main/PRIVACY.md) explains what  data we collect and, how and why we use it.
-It shall be incorporated in this terms by reference.
-If these Terms conflict with the Privacy Policy about personal data, the Privacy Policy shall prevail.
+Our [Privacy Policy](https://github.com/sonolink/arbiterer/blob/main/PRIVACY.md) explains what data we collect, and how and why we use it.
+It is incorporated into these Terms by reference.
+If these Terms conflict with the Privacy Policy about personal data, the Privacy Policy prevails.
 
 Maintainers are responsible for providing any notices and getting any consents required for their use of Contributor data.
 Do not put sensitive personal data in Rules, comments, or other inputs.
@@ -165,7 +181,7 @@ Do not use the Service to process special categories of personal data unless you
 
 We run the Service on a best-effort basis.
 We do not guarantee availability, uptime, or that checks will always run or complete.
-If our server, GitHub, or Discord is unavailable, checks may fail and pull requests may stay closed until things recover.
+If our server, GitHub, or Discord is unavailable, checks may fail and Contributions that the Service closed may stay closed until things recover.
 You shall not rely on Arbiterer as the only safeguard for anything important, including security, compliance, or access control.
 
 We do not provide a support contract or service-level agreement.
@@ -174,7 +190,8 @@ Support is best effort through the repository and our Discord server.
 We may change, pause, or discontinue the Service or any feature, with notice where practical.
 You can stop using the Service at any time as described in §6.7 and §7.
 We may suspend or terminate your access, or remove content, if you violate these Terms, if your use puts the Service or others at risk, or if the law requires it.
-We will give notice where practical.
+We will give notice where practical, except where the law or the risk requires immediate action.
+If you are subject to sanctions or your use would violate export control or sanctions laws, we may suspend or terminate your access immediately, without notice and without compensation.
 We are not liable for suspension or termination except as required by law.
 Sections 5, 8, 10, 12, 13, 14, 15, and 17 survive termination.
 
@@ -195,9 +212,9 @@ Some jurisdictions do not allow some of these exclusions, so parts of this secti
 **To the maximum extent permitted by law, our liability is limited as follows.**
 SonoLink and its members, officers, and service providers will not be liable for indirect, incidental, special, consequential, exemplary, or punitive damages, or for lost profits, revenue, data, goodwill, or business interruption, arising out of or related to the Service or these Terms.
 
-This includes losses caused by a Maintainer's Rules, pull requests that were blocked, closed, or allowed through, and outages or changes of GitHub, Discord, or the Service.
+This includes losses caused by a Maintainer's Rules, Contributions that were blocked, closed, or allowed through, and outages or changes of GitHub, Discord, or the Service.
 
-To the maximum extent permitted by law, our total liability for all claims arising out of or related to the Service or these Terms will not exceed the greater of the amount you paid us for the hosted Service in the 12 months before the claim or USD 100.
+To the maximum extent permitted by law, our total liability for all claims arising out of or related to the Service or these Terms will not exceed whichever is greater: the amount you paid us for the Service in the 12 months before the claim, or USD 100.
 
 Nothing in these Terms limits liability that cannot be limited by law, including liability for fraud, intent, gross negligence, death or personal injury, or mandatory consumer rights.
 The Service is free, and you use it at your own risk.
@@ -206,6 +223,7 @@ The Service is free, and you use it at your own risk.
 
 This section applies only if you are a Maintainer or you use the Service for an organization.
 To the maximum extent permitted by law, you will indemnify, defend, and hold harmless SonoLink and its members, officers, and service providers from claims, damages, losses, liabilities, costs, and expenses, including reasonable legal fees, arising out of or related to:
+
 - your use of the Service;
 - your Rules or your use of Discord data;
 - your violation of these Terms, applicable law, or third-party rights;
@@ -228,10 +246,10 @@ Nothing in this section prevents either party from seeking injunctive or other e
 
 We may update these Terms.
 The effective date at the top shows the latest version.
-We will post the updated Terms in the repository and, for material changes, try to give reasonable notice in the repository or on our Discord server.
+We will give at least 30 days' notice of material changes in a prominent way, such as in the repository and on our Discord server, before they take effect.
 If you continue to use the Service after the effective date, you accept the updated Terms.
 If you do not agree, stop using the Service.
-Changes do not apply retroactively.
+Changes do not apply retroactively, except for changes required by law or that are retroactive by nature, such as sanctions or export control measures.
 
 ## 17. General
 

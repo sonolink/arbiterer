@@ -2,7 +2,7 @@
 
 Effective date: October 19, 2026
 
-This Privacy policy applies to the GitHub App, the GitHub Action when it connects to the hosted Service, the linking flow at `arbiterer.com`, and the API at `api.arbiterer.com`.
+This Privacy Policy applies to the App, the Action when it connects to the Service, the linking flow at `arbiterer.com`, and the API at `api.arbiterer.com`.
 
 Related: [Terms of Service](https://github.com/sonolink/arbiterer/blob/main/TERMS.md) · [Security Policy](https://github.com/sonolink/arbiterer/blob/main/.github/SECURITY.md)
 
@@ -15,19 +15,16 @@ We do not sell your data or use it for advertising.
 
 ## Scope
 
-This policy applies to the hosted Service, the App, and the Action when it connects to the hosted Service.
+This policy applies to the Service, the App, and the Action when it connects to the Service.
+Terms used in this policy that are defined in §2 of our [Terms of Service](https://github.com/sonolink/arbiterer/blob/main/TERMS.md) have the same meaning here.
 It does not apply to a copy of Arbiterer that someone else runs.
 If you run your own copy, you are responsible for how it handles data.
 
 ## Who we are
 
 Arbiterer is run by the SonoLink Development Team ("SonoLink", "we", "us").
-For the hosted Service, we are the controller for the link records, Discord tokens, and setup records we store.
+For the Service, we are the controller for the data we store: link records (which GitHub account is linked to which Discord account for which repository), Discord tokens, and setup records (the comment the App posts on a pull request and its status).
 You can reach us at [admin@arbiterer.com](mailto:admin@arbiterer.com) or on our [Discord server](https://discord.gg/tPHVWBPedt).
-
-Contributors and Maintainers have the meanings given in §2 of the [Terms of Service](https://github.com/sonolink/arbiterer/blob/main/TERMS.md).
-Contributors open pull requests on repositories that use Arbiterer.
-Maintainers install the App or configure the Action.
 
 Maintainers are independent controllers for the Discord data their workflow receives and for what they do with it.
 They decide what their Rules request and where that data goes.
@@ -38,16 +35,16 @@ If you need a data processing agreement, contact us at [admin@arbiterer.com](mai
 We collect only the data we need to link accounts, run checks, and manage pull requests.
 The table describes each category, why we use it, and how long we keep it.
 
-| Data | Source | Purpose | Legal basis | Stored | Retention |
-| --- | --- | --- | --- | --- | --- |
-| GitHub user ID | Pull request event or GitHub sign-in | Link accounts and scope the link to a repository | Contract | Yes | While the link exists, until you ask us to delete it, or until no longer needed |
-| GitHub username | GitHub | Post the setup comment | Contract | Yes (in the GitHub comment) | Until the comment is deleted; GitHub controls it |
-| Discord user ID and tokens | Discord authorization | Identify the linked account, read profile and membership, and refresh access | Contract | Yes (tokens encrypted with AES-256-GCM) | While the link exists; an old token record may remain after replacement until you ask us to delete it or it is no longer needed |
-| Repository and pull request data | Action OIDC token and request | Scope links, update comments, rerun checks, and close or reopen pull requests | Contract | Yes | While needed to operate the Service |
-| GitHub OAuth and OIDC tokens | GitHub sign-in and the Action | Verify your GitHub identity and the calling repository | Contract | No | Discarded after use |
-| Discord profile and member data | Discord API | Pass data to the repository's workflow | Contract | No | Not stored by us; may appear in workflow logs |
-| Linking cookies and URL token | Our server | Secure the linking flow and bind it to your browser | Contract | Yes | 10 minutes by default for cookies; 15 minutes by default for the URL token |
-| Server logs | Our servers and hosting provider | Security, abuse prevention, and debugging | Legitimate interests | Yes | Only as long as needed |
+| Data                             | What it is                                                                                                                                                                           | Source                               | Purpose                                                                       | Legal basis          | Stored                                  | Retention                                                                                                                       |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------ | ----------------------------------------------------------------------------- | -------------------- | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| GitHub user ID                   | The numeric identifier of your GitHub account.                                                                                                                                       | Pull request event or GitHub sign-in | Link accounts and scope the link to a repository                              | Contract             | Yes                                     | While the link exists, until you ask us to delete it, or until no longer needed                                                 |
+| GitHub username                  | Your public GitHub login, for example "octocat".                                                                                                                                     | GitHub                               | Post the setup comment                                                        | Contract             | Yes (in the GitHub comment)             | Until the comment is deleted; GitHub controls it                                                                                |
+| Discord user ID and tokens       | Your numeric Discord ID, plus the access and refresh tokens that let us read your Discord data.                                                                                      | Discord authorization                | Identify the linked account, read profile and membership, and refresh access  | Contract             | Yes (tokens encrypted with AES-256-GCM) | While the link exists; an old token record may remain after replacement until you ask us to delete it or it is no longer needed |
+| Repository and pull request data | The repository ID, the pull request number, and the records we need to post comments and close or reopen the pull request.                                                           | Action OIDC token and request        | Scope links, update comments, rerun checks, and close or reopen pull requests | Contract             | Yes                                     | While needed to operate the Service                                                                                             |
+| GitHub OAuth and OIDC tokens     | Short-lived tokens that confirm your GitHub identity and the calling repository.                                                                                                     | GitHub sign-in and the Action        | Verify your GitHub identity and the calling repository                        | Contract             | No                                      | Discarded after use                                                                                                             |
+| Discord profile and membership   | The profile Discord returns, such as your user ID, username, display name, and avatar, and, on request, your member record in a server, such as your nickname, roles, and join date. | Discord API                          | Pass data to the repository's workflow                                        | Contract             | No                                      | Not stored by us; may appear in workflow logs                                                                                   |
+| Linking cookies and URL token    | Browser cookies and a one-time link credential that keep the linking flow tied to your browser and repository.                                                                       | Our server                           | Secure the linking flow and bind it to your browser                           | Contract             | Yes                                     | 10 minutes by default for cookies; 15 minutes by default for the URL token                                                      |
+| Server logs                      | Operational logs from our servers and hosting provider, such as errors and identifiers needed to debug problems and abuse.                                                           | Our servers and hosting provider     | Security, abuse prevention, and debugging                                     | Legitimate interests | Yes                                     | Only as long as needed                                                                                                          |
 
 We also set two linking cookies: `arbiterer_link_state` and `arbiterer_link`.
 They are `HttpOnly`, `Secure`, and `SameSite=Lax`, are limited to the `/v1/link` path, and expire after 10 minutes by default.
@@ -57,19 +54,23 @@ The cookies and link token are sealed with AES-GCM under a separate configured k
 On public repositories, Actions logs may be publicly visible.
 If this is the case, Discord profile and member data passed to a workflow may appear in those logs if a Maintainer prints it.
 
+### Sign-in permissions
+
+When you sign in with GitHub, we read your GitHub user ID and username.
+When you authorize Discord, we read your Discord user ID and profile details such as your username and avatar, and, only when a Rule asks for it, your member record in a Discord server, such as your nickname, roles, and join date.
+We do not ask either provider for your email address or password.
+
 ## What we do not collect
 
-We do not ask for passwords, payment details, repository contents, or your GitHub or Discord email address.
+We do not ask for passwords, payment details, or repository contents.
 We do not collect analytics or advertising data, track you across websites, sell your data, or use it to train machine-learning models.
 
-GitHub sign-in requests no extra OAuth scopes.
-Discord authorization requests only `identify` and `guilds.members.read`.
-Neither provider is asked for the `email` scope.
 If you email us, we receive your email address so we can reply.
 
 ## Who we share data with
 
 We share data only in these situations:
+
 - The repository's workflow and Maintainers receive your link status, your Discord profile, and, when a Rule asks for it, your member record in the requested server.
 - GitHub processes data when we use its API to post comments, close and reopen pull requests, rerun the job, and serve the OIDC signing keys we use to verify the Action's token.
 - Discord processes data when we use its API to sign you in, read your profile and member record, and refresh your access.
@@ -145,11 +146,11 @@ If we learn that we have collected data from a child below the applicable minimu
 ## Changes to this policy
 
 We will update this policy when our data practices change and will change the effective date above.
-For significant changes, we will announce them in the repository and on our Discord server, and we will ask for consent where the law requires it.
+For significant changes, we will give at least 30 days' notice in a prominent way, such as in the repository and on our Discord server, and we will ask for consent where the law requires it.
 
 ## Contact
 
-- Privacy questions and requests: [admin@arbiterer.com](mailto:admin@arbiterer.com)  
-- Discord: [https://discord.gg/tPHVWBPedt](https://discord.gg/tPHVWBPedt)  
-- Security issues: follow our [Security Policy](https://github.com/sonolink/arbiterer/blob/main/.github/SECURITY.md) and do not report them in public issues.  
-- See also our [Terms of Service](https://github.com/sonolink/arbiterer/blob/main/TERMS.md).  
+- Privacy questions and requests: [admin@arbiterer.com](mailto:admin@arbiterer.com)
+- Discord: [https://discord.gg/tPHVWBPedt](https://discord.gg/tPHVWBPedt)
+- Security issues: follow our [Security Policy](https://github.com/sonolink/arbiterer/blob/main/.github/SECURITY.md) and do not report them in public issues.
+- See also our [Terms of Service](https://github.com/sonolink/arbiterer/blob/main/TERMS.md).
