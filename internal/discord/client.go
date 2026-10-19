@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/sonolink/arbiterer/internal/config"
+	"github.com/sonolink/arbiterer/internal/version"
 )
 
 const maxResponseBytes = 1 << 20
@@ -53,8 +54,9 @@ func (c *Client) newRequest(
 		return nil, err
 	}
 
-	// version is a place holder, it should actually later come from somewhere standard.
-	req.Header.Set("User-Agent", "arbiterer/0.1 (https://github.com/sonolink/arbiterer)")
+	// Discord asks this format of every client of its HTTP API, bot or not.
+	// https://docs.discord.com/developers/reference#user-agent
+	req.Header.Set("User-Agent", "DiscordBot (https://github.com/sonolink/arbiterer, "+version.Version+")")
 
 	return req, nil
 }
