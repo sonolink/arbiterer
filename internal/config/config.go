@@ -66,6 +66,7 @@ func (c *Config) loadSecrets() error {
 	}{
 		{"POSTGRES_PASSWORD", &c.Postgres.Password},
 		{"DISCORD_CLIENT_SECRET", &c.Discord.ClientSecret},
+		{"DISCORD_MARKETPLACE_WEBHOOK", &c.Discord.MarketplaceWebhook},
 		{"GITHUB_CLIENT_SECRET", &c.GitHub.ClientSecret},
 		{"GITHUB_CLIENT_PRIVATE_KEY", &c.GitHub.PrivateKey},
 		{"GITHUB_WEBHOOK_SECRET", &c.GitHub.WebhookSecret},
@@ -140,10 +141,11 @@ func LoadLog() (Log, error) {
 
 // Discord holds application settings used for OAuth.
 type Discord struct {
-	ClientID     string `env:"DISCORD_CLIENT_ID,required"`
-	ClientSecret Secret `env:"-"`
-	RedirectURI  string `env:"DISCORD_REDIRECT_URI,required"`
-	APIURL       string `env:"DISCORD_API_URL" envDefault:"https://discord.com/api/v10"`
+	ClientID           string `env:"DISCORD_CLIENT_ID,required"`
+	ClientSecret       Secret `env:"-"`
+	RedirectURI        string `env:"DISCORD_REDIRECT_URI,required"`
+	APIURL             string `env:"DISCORD_API_URL" envDefault:"https://discord.com/api/v10"`
+	MarketplaceWebhook Secret `env:"-"`
 }
 
 // Postgres holds the configuration to connect to the postgres database.

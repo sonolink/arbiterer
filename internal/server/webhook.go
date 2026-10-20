@@ -20,10 +20,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
 
+	"github.com/sonolink/arbiterer/internal/discord"
 	"github.com/sonolink/arbiterer/internal/storage"
 )
 
@@ -77,27 +79,44 @@ type issueCommentPayload struct {
 	} `json:"repository"`
 }
 
-// marketplacePurchase is the part of a marketplace_purchase payload.
+// marketplacePurchase is a Marketplace purchase in a marketplace_purchase
+// payload.
 type marketplacePurchase struct {
 	Account struct {
-		ID    int64  `json:"id"`
-		Login string `json:"login"`
-		Type  string `json:"type"`
+		ID                       int64   `json:"id"`
+		Login                    string  `json:"login"`
+		NodeID                   string  `json:"node_id"`
+		OrganizationBillingEmail *string `json:"organization_billing_email"`
+		Type                     string  `json:"type"`
 	} `json:"account"`
-	OnFreeTrial bool `json:"on_free_trial"`
-	Plan        struct {
-		ID   int64  `json:"id"`
-		Name string `json:"name"`
+	BillingCycle    string  `json:"billing_cycle"`
+	FreeTrialEndsOn *string `json:"free_trial_ends_on"`
+	NextBillingDate *string `json:"next_billing_date"`
+	OnFreeTrial     bool    `json:"on_free_trial"`
+	Plan            struct {
+		ID                  int64    `json:"id"`
+		Name                string   `json:"name"`
+		Description         string   `json:"description"`
+		Bullets             []string `json:"bullets"`
+		HasFreeTrial        bool     `json:"has_free_trial"`
+		MonthlyPriceInCents int64    `json:"monthly_price_in_cents"`
+		YearlyPriceInCents  int64    `json:"yearly_price_in_cents"`
+		PriceModel          string   `json:"price_model"`
+		UnitName            *string  `json:"unit_name"`
 	} `json:"plan"`
+	UnitCount int64 `json:"unit_count"`
 }
 
-// marketplacePurchasePayload is the part of GitHub's marketplace_purchase
-// webhook payload the handler reads.
+// marketplacePurchasePayload is GitHub's marketplace_purchase webhook payload.
+// https://docs.github.com/en/webhooks/webhook-events-and-payloads#marketplace_purchase
 type marketplacePurchasePayload struct {
 	Action                      string               `json:"action"`
 	EffectiveDate               time.Time            `json:"effective_date"`
 	MarketplacePurchase         marketplacePurchase  `json:"marketplace_purchase"`
 	PreviousMarketplacePurchase *marketplacePurchase `json:"previous_marketplace_purchase"`
+	Sender                      struct {
+		Login string `json:"login"`
+	} `json:"sender"`
 }
 
 // handleGitHubWebhook answers POST /v1/github/webhooks: it handles commands
@@ -134,32 +153,108 @@ func (s *Server) handleGitHubWebhook(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		s.handleMarketplacePurchase(payload)
+		s.handleMarketplacePurchase(r.Context(), payload)
 	}
 
 	s.writeJSON(w, http.StatusOK, struct{}{})
 }
 
-// handleMarketplacePurchase records a Marketplace plan change.
-func (s *Server) handleMarketplacePurchase(payload marketplacePurchasePayload) {
+// handleMarketplacePurchase logs a Marketplace plan change and posts everything
+// the payload says about it to the Discord channel.
+func (s *Server) handleMarketplacePurchase(ctx context.Context, payload marketplacePurchasePayload) {
 	purchase := payload.MarketplacePurchase
+	account := purchase.Account
+	plan := purchase.Plan
 
-	attrs := []any{
+	s.logger.Info(
+		"marketplace purchase",
 		"action", payload.Action,
-		"account", purchase.Account.Login,
-		"account_id", purchase.Account.ID,
-		"account_type", purchase.Account.Type,
-		"plan", purchase.Plan.Name,
-		"plan_id", purchase.Plan.ID,
-		"on_free_trial", purchase.OnFreeTrial,
-		"effective_date", payload.EffectiveDate,
+		"account", account.Login,
+		"plan", plan.Name,
+		"sender", payload.Sender.Login,
+	)
+
+	value := func(p *string) string {
+		if p == nil || *p == "" {
+			return "-"
+		}
+
+		return *p
 	}
+
+	content := fmt.Sprintf(
+		"### Marketplace: %s\n"+
+			"[%s](https://github.com/%s) (%s, ID %d, %s)\n"+
+			"**Plan:** %s (ID %d, %s, $%.2f/month, $%.2f/year, free trial available: %t)\n"+
+			"**Units:** %d %s\n"+
+			"**Billing cycle:** %s\n"+
+			"**Next billing:** %s\n"+
+			"**On free trial:** %t, ends %s\n"+
+			"**Billing email:** %s\n"+
+			"**Effective:** <t:%d:F>\n"+
+			"**Sender:** @%s",
+		payload.Action,
+		account.Login, account.Login, account.Type, account.ID, account.NodeID,
+		plan.Name, plan.ID, plan.PriceModel,
+		float64(plan.MonthlyPriceInCents)/100, float64(plan.YearlyPriceInCents)/100, plan.HasFreeTrial,
+		purchase.UnitCount, value(plan.UnitName),
+		purchase.BillingCycle,
+		value(purchase.NextBillingDate),
+		purchase.OnFreeTrial, value(purchase.FreeTrialEndsOn),
+		value(account.OrganizationBillingEmail),
+		payload.EffectiveDate.Unix(),
+		payload.Sender.Login,
+	)
 
 	if previous := payload.PreviousMarketplacePurchase; previous != nil {
-		attrs = append(attrs, "previous_plan", previous.Plan.Name)
+		content += fmt.Sprintf("\n**Previous plan:** %s (ID %d)", previous.Plan.Name, previous.Plan.ID)
 	}
 
-	s.logger.Info("marketplace purchase", attrs...)
+	content += "\n\n**" + plan.Name + "**: " + plan.Description
+	for _, bullet := range plan.Bullets {
+		content += "\n- " + bullet
+	}
+
+	color := 0x0969da
+	switch payload.Action {
+	case "purchased":
+		color = 0x2da44e
+	case "pending_change", "pending_change_cancelled":
+		color = 0xd4a72c
+	case "cancelled":
+		color = 0xcf222e
+	}
+
+	container, err := json.Marshal(map[string]any{
+		"type":         17,
+		"accent_color": color,
+		"components": []map[string]any{
+			{
+				"type":       9,
+				"components": []map[string]any{{"type": 10, "content": content}},
+				"accessory": map[string]any{
+					"type":  11,
+					"media": map[string]any{"url": fmt.Sprintf("https://avatars.githubusercontent.com/u/%d?v=4", account.ID)},
+				},
+			},
+			{
+				"type": 1,
+				"components": []map[string]any{
+					{"type": 2, "style": 5, "label": "View on GitHub", "url": "https://github.com/" + account.Login},
+				},
+			},
+		},
+	})
+	if err == nil {
+		err = s.discordClient.SendWebhook(ctx, discord.WebhookPayload{
+			Components: []json.RawMessage{container},
+			Flags:      discord.FlagIsComponentsV2,
+		})
+	}
+
+	if err != nil {
+		s.logger.Error("sending marketplace notification to discord", "error", err, "action", payload.Action)
+	}
 }
 
 // handleIssueComment runs a command from a pull request comment when its author

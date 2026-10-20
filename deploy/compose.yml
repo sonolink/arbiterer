@@ -28,19 +28,21 @@ services:
       SERVER_HOST: 0.0.0.0
       SERVER_PORT: "8080"
       DISCORD_CLIENT_SECRET_FILE: /run/secrets/discord_client_secret
+      DISCORD_MARKETPLACE_WEBHOOK_FILE: /run/secrets/discord_marketplace_webhook
       GITHUB_CLIENT_SECRET_FILE: /run/secrets/github_client_secret
       GITHUB_CLIENT_PRIVATE_KEY_FILE: /run/secrets/github_client_private_key
+      GITHUB_WEBHOOK_SECRET_FILE: /run/secrets/github_webhook_secret
       STORAGE_ENCRYPTION_KEY_FILE: /run/secrets/storage_encryption_key
       BROWSER_ENCRYPTION_KEY_FILE: /run/secrets/browser_encryption_key
-      GITHUB_WEBHOOK_SECRET_FILE: /run/secrets/github_webhook_secret
     secrets:
       - postgres_password
       - discord_client_secret
+      - discord_marketplace_webhook
       - github_client_secret
       - github_client_private_key
+      - github_webhook_secret
       - storage_encryption_key
       - browser_encryption_key
-      - github_webhook_secret
     ports:
       - "127.0.0.1:${SERVER_PORT:-8080}:8080"
     healthcheck:
@@ -88,16 +90,18 @@ secrets:
     file: ${SECRETS_DIR:-./secrets}/postgres_password.txt
   discord_client_secret:
     file: ${SECRETS_DIR:-./secrets}/discord_client_secret.txt
+  discord_marketplace_webhook:
+    file: ${SECRETS_DIR:-./secrets}/discord_marketplace_webhook.txt
   github_client_secret:
     file: ${SECRETS_DIR:-./secrets}/github_client_secret.txt
   github_client_private_key:
     file: ${SECRETS_DIR:-./secrets}/github_client_private_key.txt
+  github_webhook_secret:
+    file: ${SECRETS_DIR:-./secrets}/github_webhook_secret.txt
   storage_encryption_key:
     file: ${SECRETS_DIR:-./secrets}/storage_encryption_key.txt
   browser_encryption_key:
     file: ${SECRETS_DIR:-./secrets}/browser_encryption_key.txt
-  github_webhook_secret:
-    file: ${SECRETS_DIR:-./secrets}/github_webhook_secret.txt
 
 volumes:
   pg-data:

@@ -23,6 +23,7 @@ services:
       <<: *app-env
       POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
       DISCORD_CLIENT_SECRET_FILE: /run/secrets/discord_client_secret
+      DISCORD_MARKETPLACE_WEBHOOK_FILE: /run/secrets/discord_marketplace_webhook
       GITHUB_CLIENT_SECRET_FILE: /run/secrets/github_client_secret
       GITHUB_CLIENT_PRIVATE_KEY_FILE: /run/secrets/github_client_private_key
       GITHUB_WEBHOOK_SECRET_FILE: /run/secrets/github_webhook_secret
@@ -31,6 +32,7 @@ services:
     secrets:
       - postgres_password
       - discord_client_secret
+      - discord_marketplace_webhook
       - github_client_secret
       - github_client_private_key
       - github_webhook_secret
@@ -78,6 +80,8 @@ secrets:
     file: ${SECRETS_DIR:-./secrets}/postgres_password.txt
   discord_client_secret:
     file: ${SECRETS_DIR:-./secrets}/discord_client_secret.txt
+  discord_marketplace_webhook:
+    file: ${SECRETS_DIR:-./secrets}/discord_marketplace_webhook.txt
   github_client_secret:
     file: ${SECRETS_DIR:-./secrets}/github_client_secret.txt
   github_client_private_key:
