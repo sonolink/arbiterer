@@ -4,6 +4,18 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
+    paths:
+      - "**.go"
+      - "**.sql"
+      - "go.mod"
+      - "go.sum"
+      - "Dockerfile"
+      - ".dockerignore"
+      - ".golangci.yml"
+      - "deploy/**"
+      - ".github/workflows/**"
+      - ".github/actions/**"
+      - "CHANGELOG.md"
 
 permissions: {}
 
