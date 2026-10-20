@@ -33,6 +33,11 @@ const (
 	issueCommentEvent     = "issue_comment"
 	actionCreated         = "created"
 
+	// marketplacePurchaseEvent is sent by the Marketplace listing's webhook when
+	// an account buys, changes or cancels a plan.
+	// https://docs.github.com/en/apps/github-marketplace/using-the-github-marketplace-api-in-your-app/webhook-events-for-the-github-marketplace-api
+	marketplacePurchaseEvent = "marketplace_purchase"
+
 	commandPrefix  = "/arbiterer"
 	recheckCommand = "recheck"
 
@@ -72,8 +77,32 @@ type issueCommentPayload struct {
 	} `json:"repository"`
 }
 
+// marketplacePurchase is the part of a marketplace_purchase payload.
+type marketplacePurchase struct {
+	Account struct {
+		ID    int64  `json:"id"`
+		Login string `json:"login"`
+		Type  string `json:"type"`
+	} `json:"account"`
+	OnFreeTrial bool `json:"on_free_trial"`
+	Plan        struct {
+		ID   int64  `json:"id"`
+		Name string `json:"name"`
+	} `json:"plan"`
+}
+
+// marketplacePurchasePayload is the part of GitHub's marketplace_purchase
+// webhook payload the handler reads.
+type marketplacePurchasePayload struct {
+	Action                      string               `json:"action"`
+	EffectiveDate               time.Time            `json:"effective_date"`
+	MarketplacePurchase         marketplacePurchase  `json:"marketplace_purchase"`
+	PreviousMarketplacePurchase *marketplacePurchase `json:"previous_marketplace_purchase"`
+}
+
 // handleGitHubWebhook answers POST /v1/github/webhooks: it handles commands
-// from pull request comments, such as /arbiterer recheck.
+// from pull request comments, such as /arbiterer recheck, and records
+// Marketplace plan changes.
 func (s *Server) handleGitHubWebhook(w http.ResponseWriter, r *http.Request) {
 	body, ok := s.readBody(w, r, maxWebhookRequestBytes)
 	if !ok {
@@ -87,21 +116,50 @@ func (s *Server) handleGitHubWebhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if r.Header.Get(githubEventHeader) != issueCommentEvent {
-		s.writeJSON(w, http.StatusOK, struct{}{})
+	switch r.Header.Get(githubEventHeader) {
+	case issueCommentEvent:
+		var payload issueCommentPayload
+		if err := json.Unmarshal(body, &payload); err != nil {
+			s.writeProblem(w, r, http.StatusBadRequest, "invalid webhook payload")
 
-		return
+			return
+		}
+
+		s.handleIssueComment(r.Context(), payload)
+	case marketplacePurchaseEvent:
+		var payload marketplacePurchasePayload
+		if err := json.Unmarshal(body, &payload); err != nil {
+			s.writeProblem(w, r, http.StatusBadRequest, "invalid webhook payload")
+
+			return
+		}
+
+		s.handleMarketplacePurchase(payload)
 	}
 
-	var payload issueCommentPayload
-	if err := json.Unmarshal(body, &payload); err != nil {
-		s.writeProblem(w, r, http.StatusBadRequest, "invalid webhook payload")
-
-		return
-	}
-
-	s.handleIssueComment(r.Context(), payload)
 	s.writeJSON(w, http.StatusOK, struct{}{})
+}
+
+// handleMarketplacePurchase records a Marketplace plan change.
+func (s *Server) handleMarketplacePurchase(payload marketplacePurchasePayload) {
+	purchase := payload.MarketplacePurchase
+
+	attrs := []any{
+		"action", payload.Action,
+		"account", purchase.Account.Login,
+		"account_id", purchase.Account.ID,
+		"account_type", purchase.Account.Type,
+		"plan", purchase.Plan.Name,
+		"plan_id", purchase.Plan.ID,
+		"on_free_trial", purchase.OnFreeTrial,
+		"effective_date", payload.EffectiveDate,
+	}
+
+	if previous := payload.PreviousMarketplacePurchase; previous != nil {
+		attrs = append(attrs, "previous_plan", previous.Plan.Name)
+	}
+
+	s.logger.Info("marketplace purchase", attrs...)
 }
 
 // handleIssueComment runs a command from a pull request comment when its author
