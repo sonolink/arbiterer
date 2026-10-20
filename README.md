@@ -1,6 +1,6 @@
 <div align="center">
 
-![Arbiterer](.github/assets/banner.png)
+![Arbiterer](.github/assets/banner_v2.png)
 
 A GitHub Action that lets your Discord community decide whose contributions get through.
 
@@ -56,6 +56,7 @@ jobs:
         with:
           # Exempt the repository owner, organization members, and collaborators.
           exempt-associations: OWNER,MEMBER,COLLABORATOR
+          # close-on-failure: true # Close failing PRs and reopen them automatically once the author links or a recheck passes
 ```
 
 If you only need authors to link their accounts, this is enough. To enforce conditions on the linked Discord account, add [rules](#rules).
@@ -70,7 +71,7 @@ If a rule failed, the author can request another run without pushing:
 /arbiterer recheck
 ```
 
-Arbiterer adds a thumbs-up reaction when it starts a manual recheck and a confused reaction when the recheck does not start, such as during the cooldown or when no workflow run is available. If Arbiterer cannot authenticate with GitHub, it cannot react.
+Arbiterer adds a thumbs-up (`👍`) reaction when it starts a manual recheck and a confused (`😕`) reaction when the recheck does not start, such as during the cooldown or when no workflow run is available. If Arbiterer cannot authenticate with GitHub, it cannot react.
 
 > [!NOTE]
 > Only the pull request author can trigger a manual recheck, at most once every five minutes per pull request. A failed start can be retried immediately. Commands on merged pull requests, or on pull requests closed by someone other than Arbiterer, are ignored without a reaction.
