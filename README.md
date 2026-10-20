@@ -1,6 +1,6 @@
 <div align="center">
 
-![Arbiterer](assets/banner.png)
+![Arbiterer](.github/assets/banner.png)
 
 A GitHub Action that lets your Discord community decide whose contributions get through.
 
@@ -15,26 +15,13 @@ A GitHub Action that lets your Discord community decide whose contributions get 
 1. A contributor opens a pull request.
 2. Arbiterer checks whether the author has linked their GitHub account to Discord. If not, it comments with a link to do so.
 3. Once linked, your rules run against the author's Discord identity, and the check passes or fails.
-4. The author can comment `/arbiterer recheck` to run the check again without pushing.
+4. If the author links their account after a failed check, Arbiterer re-runs the check automatically.
 
 Rules are optional. Without them, authors only need to link their accounts.  
 With `close-on-failure`, a failed check closes the pull request and a later pass reopens it.
 
 > [!IMPORTANT]
 > Links are **one-to-one per repository**: one GitHub account maps to one Discord account, and vice versa. The same Discord account can be linked to different GitHub accounts in different repositories.
-
-### Rechecking a pull request
-
-Arbiterer re-runs the check automatically after the author links their account. If a rule failed, the author can request another run without pushing:
-
-```text
-/arbiterer recheck
-```
-
-Arbiterer adds a thumbs-up reaction when it starts a manual recheck, and a confused reaction when it cannot.
-
-> [!NOTE]
-> Only the pull request author can trigger a manual recheck, at most once every five minutes per pull request. Merged pull requests are ignored, and a passing recheck reopens a pull request Arbiterer closed.
 
 ## Getting started
 
@@ -72,6 +59,25 @@ jobs:
 ```
 
 If you only need authors to link their accounts, this is enough. To enforce conditions on the linked Discord account, add [rules](#rules).
+
+## Usage
+
+### Rechecking a pull request
+
+If a rule failed, the author can request another run without pushing:
+
+```text
+/arbiterer recheck
+```
+
+Arbiterer adds a thumbs-up reaction when it starts a manual recheck and a confused reaction when the recheck does not start, such as during the cooldown or when no workflow run is available. If Arbiterer cannot authenticate with GitHub, it cannot react.
+
+> [!NOTE]
+> Only the pull request author can trigger a manual recheck, at most once every five minutes per pull request. A failed start can be retried immediately. Commands on merged pull requests, or on pull requests closed by someone other than Arbiterer, are ignored without a reaction.
+
+### Closing and reopening pull requests
+
+With `close-on-failure` enabled, a failed check closes the pull request. Arbiterer reopens a pull request it closed once the author links their account or a later check passes. It never reopens a pull request closed by anyone else or one that has been merged.
 
 ## Configuration
 
