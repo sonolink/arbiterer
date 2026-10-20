@@ -79,44 +79,43 @@ type issueCommentPayload struct {
 	} `json:"repository"`
 }
 
-// marketplacePurchase is a Marketplace purchase in a marketplace_purchase
-// payload.
+// Marketplace purchase actions, spelled as GitHub sends them.
+const (
+	marketplacePurchased             = "purchased"
+	marketplaceChanged               = "changed"
+	marketplacePendingChange         = "pending_change"
+	marketplacePendingChangeCanceled = "pending_change_cancelled" //nolint:misspell // GitHub's spelling.
+	marketplaceCanceled              = "cancelled"                //nolint:misspell // GitHub's spelling.
+)
+
+const (
+	componentType     = "type"
+	componentChildren = "components"
+	componentContent  = "content"
+)
+
+// marketplacePurchase is the part of a Marketplace purchase in a
+// marketplace_purchase payload worth logging.
 type marketplacePurchase struct {
 	Account struct {
-		ID                       int64   `json:"id"`
-		Login                    string  `json:"login"`
-		NodeID                   string  `json:"node_id"`
-		OrganizationBillingEmail *string `json:"organization_billing_email"`
-		Type                     string  `json:"type"`
+		ID    int64  `json:"id"`
+		Login string `json:"login"`
+		Type  string `json:"type"`
 	} `json:"account"`
-	BillingCycle    string  `json:"billing_cycle"`
-	FreeTrialEndsOn *string `json:"free_trial_ends_on"`
-	NextBillingDate *string `json:"next_billing_date"`
-	OnFreeTrial     bool    `json:"on_free_trial"`
-	Plan            struct {
-		ID                  int64    `json:"id"`
-		Name                string   `json:"name"`
-		Description         string   `json:"description"`
-		Bullets             []string `json:"bullets"`
-		HasFreeTrial        bool     `json:"has_free_trial"`
-		MonthlyPriceInCents int64    `json:"monthly_price_in_cents"`
-		YearlyPriceInCents  int64    `json:"yearly_price_in_cents"`
-		PriceModel          string   `json:"price_model"`
-		UnitName            *string  `json:"unit_name"`
+	OnFreeTrial bool `json:"on_free_trial"`
+	Plan        struct {
+		ID   int64  `json:"id"`
+		Name string `json:"name"`
 	} `json:"plan"`
-	UnitCount int64 `json:"unit_count"`
 }
 
-// marketplacePurchasePayload is GitHub's marketplace_purchase webhook payload.
-// https://docs.github.com/en/webhooks/webhook-events-and-payloads#marketplace_purchase
+// marketplacePurchasePayload is the part of GitHub's marketplace_purchase
+// webhook payload the handler reads.
 type marketplacePurchasePayload struct {
 	Action                      string               `json:"action"`
 	EffectiveDate               time.Time            `json:"effective_date"`
 	MarketplacePurchase         marketplacePurchase  `json:"marketplace_purchase"`
 	PreviousMarketplacePurchase *marketplacePurchase `json:"previous_marketplace_purchase"`
-	Sender                      struct {
-		Login string `json:"login"`
-	} `json:"sender"`
 }
 
 // handleGitHubWebhook answers POST /v1/github/webhooks: it handles commands
@@ -159,88 +158,73 @@ func (s *Server) handleGitHubWebhook(w http.ResponseWriter, r *http.Request) {
 	s.writeJSON(w, http.StatusOK, struct{}{})
 }
 
-// handleMarketplacePurchase logs a Marketplace plan change and posts everything
-// the payload says about it to the Discord channel.
+// handleMarketplacePurchase logs a Marketplace plan change and announces it in
+// the Discord channel.
 func (s *Server) handleMarketplacePurchase(ctx context.Context, payload marketplacePurchasePayload) {
 	purchase := payload.MarketplacePurchase
-	account := purchase.Account
-	plan := purchase.Plan
+	login := purchase.Account.Login
+	profile := "https://github.com/" + login
 
 	s.logger.Info(
 		"marketplace purchase",
 		"action", payload.Action,
-		"account", account.Login,
-		"plan", plan.Name,
-		"sender", payload.Sender.Login,
+		"account", login,
+		"account_id", purchase.Account.ID,
+		"plan", purchase.Plan.Name,
+		"plan_id", purchase.Plan.ID,
+		"effective_date", payload.EffectiveDate,
 	)
 
-	value := func(p *string) string {
-		if p == nil || *p == "" {
-			return "-"
-		}
-
-		return *p
-	}
-
-	content := fmt.Sprintf(
-		"### Marketplace: %s\n"+
-			"[%s](https://github.com/%s) (%s, ID %d, %s)\n"+
-			"**Plan:** %s (ID %d, %s, $%.2f/month, $%.2f/year, free trial available: %t)\n"+
-			"**Units:** %d %s\n"+
-			"**Billing cycle:** %s\n"+
-			"**Next billing:** %s\n"+
-			"**On free trial:** %t, ends %s\n"+
-			"**Billing email:** %s\n"+
-			"**Effective:** <t:%d:F>\n"+
-			"**Sender:** @%s",
-		payload.Action,
-		account.Login, account.Login, account.Type, account.ID, account.NodeID,
-		plan.Name, plan.ID, plan.PriceModel,
-		float64(plan.MonthlyPriceInCents)/100, float64(plan.YearlyPriceInCents)/100, plan.HasFreeTrial,
-		purchase.UnitCount, value(plan.UnitName),
-		purchase.BillingCycle,
-		value(purchase.NextBillingDate),
-		purchase.OnFreeTrial, value(purchase.FreeTrialEndsOn),
-		value(account.OrganizationBillingEmail),
-		payload.EffectiveDate.Unix(),
-		payload.Sender.Login,
-	)
-
-	if previous := payload.PreviousMarketplacePurchase; previous != nil {
-		content += fmt.Sprintf("\n**Previous plan:** %s (ID %d)", previous.Plan.Name, previous.Plan.ID)
-	}
-
-	content += "\n\n**" + plan.Name + "**: " + plan.Description
-	for _, bullet := range plan.Bullets {
-		content += "\n- " + bullet
-	}
-
-	color := 0x0969da
+	title, color := "Marketplace: "+payload.Action, 0x0969da
 	switch payload.Action {
-	case "purchased":
-		color = 0x2da44e
-	case "pending_change", "pending_change_cancelled":
-		color = 0xd4a72c
-	case "cancelled":
-		color = 0xcf222e
+	case marketplacePurchased:
+		title, color = "New Marketplace install", 0x2da44e
+	case marketplaceChanged:
+		title = "Marketplace plan changed"
+	case marketplacePendingChange:
+		title, color = "Marketplace plan change scheduled", 0xd4a72c
+	case marketplacePendingChangeCanceled:
+		title, color = "Scheduled Marketplace change cancelled", 0xd4a72c
+	case marketplaceCanceled:
+		title, color = "Marketplace plan cancelled", 0xcf222e
 	}
+
+	plan := purchase.Plan.Name
+	if previous := payload.PreviousMarketplacePurchase; previous != nil && previous.Plan.Name != plan {
+		plan = previous.Plan.Name + " → " + plan
+	}
+
+	if purchase.OnFreeTrial {
+		plan += " (free trial)"
+	}
+
+	details := fmt.Sprintf(
+		"**Plan:** %s\n**Account type:** %s\n**Effective:** <t:%d:F>",
+		plan, purchase.Account.Type, payload.EffectiveDate.Unix(),
+	)
 
 	container, err := json.Marshal(map[string]any{
-		"type":         17,
+		componentType:  17,
 		"accent_color": color,
-		"components": []map[string]any{
+		componentChildren: []map[string]any{
 			{
-				"type":       9,
-				"components": []map[string]any{{"type": 10, "content": content}},
+				componentType: 9,
+				componentChildren: []map[string]any{
+					{componentType: 10, componentContent: "### " + title},
+					{componentType: 10, componentContent: "[" + login + "](" + profile + ")"},
+				},
 				"accessory": map[string]any{
-					"type":  11,
-					"media": map[string]any{"url": fmt.Sprintf("https://avatars.githubusercontent.com/u/%d?v=4", account.ID)},
+					componentType: 11,
+					"media":       map[string]any{"url": fmt.Sprintf("https://avatars.githubusercontent.com/u/%d?v=4", purchase.Account.ID)},
+					"description": login + "'s avatar",
 				},
 			},
+			{componentType: 14, "divider": true, "spacing": 1},
+			{componentType: 10, componentContent: details},
 			{
-				"type": 1,
-				"components": []map[string]any{
-					{"type": 2, "style": 5, "label": "View on GitHub", "url": "https://github.com/" + account.Login},
+				componentType: 1,
+				componentChildren: []map[string]any{
+					{componentType: 2, "style": 5, "label": "View on GitHub", "url": profile},
 				},
 			},
 		},
