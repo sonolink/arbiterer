@@ -23,13 +23,12 @@ import (
 	"strings"
 )
 
-// webhookSignaturePrefix marks the HMAC algorithm GitHub used for a signature.
-const webhookSignaturePrefix = "sha256="
-
 // VerifyWebhook reports whether signature authenticates payload with the app's
 // webhook secret. GitHub signs the raw request body with HMAC-SHA256.
 // https://docs.github.com/en/webhooks/using-webhooks/validating-webhook-deliveries
 func (c *Client) VerifyWebhook(payload []byte, signature string) bool {
+	const webhookSignaturePrefix = "sha256="
+
 	if c.cfg.WebhookSecret == "" {
 		return false
 	}
