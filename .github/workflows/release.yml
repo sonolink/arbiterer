@@ -34,7 +34,16 @@ jobs:
             exit 1
           fi
 
-      - name: Get version
+      - name: Check version matches tag
+        run: |
+          want=${GITHUB_REF_NAME#v}
+          got=$(sed -nE 's/^const Version = "([^"]+)"$/\1/p' internal/version/version.go)
+          if [ "$got" != "$want" ]; then
+            echo "::error::internal/version/version.go has version '$got', but the tag is '$GITHUB_REF_NAME'"
+            exit 1
+          fi
+
+      - name: Check latest release
         id: version
         run: |
           releases=$(git tag --list | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V)
@@ -43,7 +52,7 @@ jobs:
           echo "latest=$(is "$(echo "$releases" | tail -n 1)")" >> "$GITHUB_OUTPUT"
           echo "latest_in_major=$(is "$(echo "$releases" | grep "^$major\." | tail -n 1)")" >> "$GITHUB_OUTPUT"
 
-      - name: Check changelog
+      - name: Check changelog entry
         run: sh .github/scripts/release-notes.sh "${GITHUB_REF_NAME#v}"
 
   image:
