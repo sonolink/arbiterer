@@ -359,7 +359,7 @@ func (s *Server) recheckPullRequest(
 
 		s.reactToCommand(ctx, token, payload, "confused")
 		s.logger.Warn(
-			"rerunning workflow run after recheck",
+			"failed to rerun workflow run after recheck",
 			"error", err,
 			"repository", repo,
 			"run_id", runID,
@@ -371,7 +371,7 @@ func (s *Server) recheckPullRequest(
 	s.reactToCommand(ctx, token, payload, "+1")
 
 	s.logger.Info(
-		"rerunning workflow run after recheck",
+		"reran workflow run after recheck",
 		"repository", repo,
 		"issue_number", payload.Issue.Number,
 		"run_id", runID,
