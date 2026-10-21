@@ -184,9 +184,9 @@ func (s *Server) handleMarketplacePurchase(ctx context.Context, payload marketpl
 	case marketplacePendingChange:
 		title, color = "Marketplace plan change scheduled", 0xd4a72c
 	case marketplacePendingChangeCanceled:
-		title, color = "Scheduled Marketplace change cancelled", 0xd4a72c
+		title, color = "Scheduled Marketplace change canceled", 0xd4a72c
 	case marketplaceCanceled:
-		title, color = "Marketplace plan cancelled", 0xcf222e
+		title, color = "Marketplace plan canceled", 0xcf222e
 	}
 
 	plan := purchase.Plan.Name
