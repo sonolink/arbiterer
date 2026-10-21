@@ -62,7 +62,7 @@ func (s *Store) TakePullRequestRun(
 			AND issue_number = $2
 			AND (
 				last_recheck_at IS NULL
-				OR last_recheck_at <= NOW() - ($3::double precision * INTERVAL '1 second')
+				OR last_recheck_at <= NOW() - make_interval(secs => $3)
 			)
 		RETURNING run_id`
 
