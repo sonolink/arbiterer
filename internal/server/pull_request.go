@@ -144,7 +144,7 @@ func (s *Server) handleGitHubPullRequestClose(w http.ResponseWriter, r *http.Req
 	}
 
 	if req.RulesFailed && !pr.Merged {
-		s.notifyRulesFailed(ctx, claims, req.IssueNumber)
+		s.notifyRulesFailed(ctx, claims, req.IssueNumber, token)
 	}
 
 	if pr.State != "open" {
@@ -185,7 +185,7 @@ func (s *Server) handleGitHubPullRequestRulesFailed(w http.ResponseWriter, r *ht
 		return
 	}
 
-	_, pr, err := s.loadPullRequest(ctx, claims.RepositoryID, claims.Repository, req.IssueNumber)
+	token, pr, err := s.loadPullRequest(ctx, claims.RepositoryID, claims.Repository, req.IssueNumber)
 	if err != nil {
 		s.logger.Error(
 			"loading pull request",
@@ -199,7 +199,7 @@ func (s *Server) handleGitHubPullRequestRulesFailed(w http.ResponseWriter, r *ht
 	}
 
 	if !pr.Merged {
-		s.notifyRulesFailed(ctx, claims, req.IssueNumber)
+		s.notifyRulesFailed(ctx, claims, req.IssueNumber, token)
 	}
 
 	s.writeJSON(w, http.StatusOK, struct{}{})

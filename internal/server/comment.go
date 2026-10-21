@@ -157,6 +157,30 @@ func (s *Server) syncSetupComment(
 	linkURL string,
 	commentOnLinked bool,
 ) error {
+	return s.syncSetupCommentWithToken(
+		ctx,
+		"",
+		repositoryID,
+		repo,
+		issueNumber,
+		status,
+		linkURL,
+		commentOnLinked,
+	)
+}
+
+// syncSetupCommentWithToken reconciles the setup comment using token when it is
+// given, creating an installation token otherwise.
+func (s *Server) syncSetupCommentWithToken(
+	ctx context.Context,
+	token string,
+	repositoryID int64,
+	repo string,
+	issueNumber int64,
+	status commentStatus,
+	linkURL string,
+	commentOnLinked bool,
+) error {
 	if issueNumber == 0 {
 		return nil
 	}
@@ -170,9 +194,11 @@ func (s *Server) syncSetupComment(
 		return nil
 	}
 
-	token, err := s.githubClient.CreateInstallationToken(ctx, repositoryID, repo)
-	if err != nil {
-		return fmt.Errorf("creating installation token: %w", err)
+	if token == "" {
+		token, err = s.githubClient.CreateInstallationToken(ctx, repositoryID, repo)
+		if err != nil {
+			return fmt.Errorf("creating installation token: %w", err)
+		}
 	}
 
 	author, err := s.githubClient.FetchIssueAuthor(ctx, token, repo, issueNumber)
@@ -244,10 +270,16 @@ func (s *Server) notifyPassed(ctx context.Context, claims *github.Claims, issueN
 }
 
 // notifyRulesFailed reconciles the setup comment to explain that the author did
-// not satisfy the rules.
-func (s *Server) notifyRulesFailed(ctx context.Context, claims *github.Claims, issueNumber int64) {
-	if err := s.syncSetupComment(
+// not satisfy the rules, reusing token when the caller already created one.
+func (s *Server) notifyRulesFailed(
+	ctx context.Context,
+	claims *github.Claims,
+	issueNumber int64,
+	token string,
+) {
+	if err := s.syncSetupCommentWithToken(
 		ctx,
+		token,
 		claims.RepositoryID,
 		claims.Repository,
 		issueNumber,
