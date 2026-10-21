@@ -4,6 +4,23 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
+    paths-ignore:
+      - "README.md"
+      - "PRIVACY.md"
+      - "TERMS.md"
+      - "LICENSE"
+      - "docs/**"
+      - ".github/*.md"
+      - ".github/CODEOWNERS"
+      - ".github/renovate.json"
+      - ".github/ISSUE_TEMPLATE/**"
+      - ".github/assets/**"
+      - ".env.example"
+      - "compose.yml"
+      - "secrets/*.example.txt"
+      - ".editorconfig"
+      - ".gitattributes"
+      - ".gitignore"
 
 permissions: {}
 
