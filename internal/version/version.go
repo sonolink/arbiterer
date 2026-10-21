@@ -17,4 +17,4 @@ limitations under the License.
 package version
 
 // Version is the application's version.
-const Version = "0.0.0"
+const Version = "1.0.0"
