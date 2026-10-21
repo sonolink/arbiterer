@@ -43,7 +43,7 @@ jobs:
             exit 1
           fi
 
-      - name: Check latest release
+      - name: Classify which tags to move
         id: version
         run: |
           releases=$(git tag --list | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V)
