@@ -88,10 +88,33 @@ const (
 	marketplaceCanceled              = "cancelled"                //nolint:misspell // GitHub's spelling.
 )
 
+// Discord component types and styles used in the Marketplace notification.
 const (
-	componentType     = "type"
-	componentChildren = "components"
-	componentContent  = "content"
+	componentActionRow = 1
+	componentButton    = 2
+	componentSection   = 9
+	componentText      = 10
+	componentThumbnail = 11
+	componentSeparator = 14
+	componentContainer = 17
+
+	buttonStyleLink       = 5
+	separatorSpacingSmall = 1
+)
+
+// Discord component field names used in the Marketplace notification.
+const (
+	componentTypeKey     = "type"
+	componentChildrenKey = "components"
+	componentContentKey  = "content"
+)
+
+// Marketplace notification colors, in Discord's integer format.
+const (
+	colorInfo    = 0x0969da
+	colorSuccess = 0x2da44e
+	colorWarning = 0xd4a72c
+	colorDanger  = 0xcf222e
 )
 
 // marketplacePurchase is the part of a Marketplace purchase in a
@@ -162,34 +185,116 @@ func (s *Server) handleGitHubWebhook(w http.ResponseWriter, r *http.Request) {
 // the Discord channel.
 func (s *Server) handleMarketplacePurchase(ctx context.Context, payload marketplacePurchasePayload) {
 	purchase := payload.MarketplacePurchase
-	login := purchase.Account.Login
-	profile := "https://github.com/" + login
 
 	s.logger.Info(
 		"marketplace purchase",
 		"action", payload.Action,
-		"account", login,
+		"account", purchase.Account.Login,
 		"account_id", purchase.Account.ID,
 		"plan", purchase.Plan.Name,
 		"plan_id", purchase.Plan.ID,
 		"effective_date", payload.EffectiveDate,
 	)
 
-	title, color := "Marketplace: "+payload.Action, 0x0969da
-	switch payload.Action {
-	case marketplacePurchased:
-		title, color = "New Marketplace install", 0x2da44e
-	case marketplaceChanged:
-		title = "Marketplace plan changed"
-	case marketplacePendingChange:
-		title, color = "Marketplace plan change scheduled", 0xd4a72c
-	case marketplacePendingChangeCanceled:
-		title, color = "Scheduled Marketplace change cancelled", 0xd4a72c
-	case marketplaceCanceled:
-		title, color = "Marketplace plan cancelled", 0xcf222e
+	notification, err := marketplaceNotification(payload)
+	if err != nil {
+		s.logger.Error(
+			"building marketplace notification",
+			"error", err,
+			"action", payload.Action,
+		)
+
+		return
 	}
 
+	if err := s.discordClient.SendWebhook(ctx, notification); err != nil {
+		s.logger.Error(
+			"sending marketplace notification to discord",
+			"error", err,
+			"action", payload.Action,
+		)
+	}
+}
+
+// marketplaceNotification builds the Discord message announcing a Marketplace
+// plan change.
+func marketplaceNotification(payload marketplacePurchasePayload) (discord.WebhookPayload, error) {
+	container, err := json.Marshal(marketplaceContainer(payload))
+	if err != nil {
+		return discord.WebhookPayload{}, fmt.Errorf("encoding marketplace notification: %w", err)
+	}
+
+	return discord.WebhookPayload{
+		Components: []json.RawMessage{container},
+		Flags:      discord.FlagIsComponentsV2,
+	}, nil
+}
+
+// marketplaceContainer builds the container component shown in Discord.
+func marketplaceContainer(payload marketplacePurchasePayload) map[string]any {
+	purchase := payload.MarketplacePurchase
+	login := purchase.Account.Login
+	profile := "https://github.com/" + login
+	avatarURL := fmt.Sprintf("https://avatars.githubusercontent.com/u/%d?v=4", purchase.Account.ID)
+	title, color := marketplaceTitle(payload.Action)
+
+	return map[string]any{
+		componentTypeKey: componentContainer,
+		"accent_color":   color,
+		componentChildrenKey: []map[string]any{
+			{
+				componentTypeKey: componentSection,
+				componentChildrenKey: []map[string]any{
+					{componentTypeKey: componentText, componentContentKey: "### " + title},
+					{componentTypeKey: componentText, componentContentKey: "[" + login + "](" + profile + ")"},
+				},
+				"accessory": map[string]any{
+					componentTypeKey: componentThumbnail,
+					"media":          map[string]any{"url": avatarURL},
+					"description":    login + "'s avatar",
+				},
+			},
+			{componentTypeKey: componentSeparator, "divider": true, "spacing": separatorSpacingSmall},
+			{componentTypeKey: componentText, componentContentKey: marketplaceDetails(payload)},
+			{
+				componentTypeKey: componentActionRow,
+				componentChildrenKey: []map[string]any{
+					{
+						componentTypeKey: componentButton,
+						"style":          buttonStyleLink,
+						"label":          "View on GitHub",
+						"url":            profile,
+					},
+				},
+			},
+		},
+	}
+}
+
+// marketplaceTitle returns the notification title and accent color for an
+// action.
+func marketplaceTitle(action string) (title string, color int) {
+	switch action {
+	case marketplacePurchased:
+		return "New Marketplace install", colorSuccess
+	case marketplaceChanged:
+		return "Marketplace plan changed", colorInfo
+	case marketplacePendingChange:
+		return "Marketplace plan change scheduled", colorWarning
+	case marketplacePendingChangeCanceled:
+		return "Scheduled Marketplace change canceled", colorWarning
+	case marketplaceCanceled:
+		return "Marketplace plan canceled", colorDanger
+	default:
+		return "Marketplace: " + action, colorInfo
+	}
+}
+
+// marketplaceDetails formats the plan, account type and effective date.
+func marketplaceDetails(payload marketplacePurchasePayload) string {
+	purchase := payload.MarketplacePurchase
 	plan := purchase.Plan.Name
+
 	if previous := payload.PreviousMarketplacePurchase; previous != nil && previous.Plan.Name != plan {
 		plan = previous.Plan.Name + " → " + plan
 	}
@@ -198,47 +303,10 @@ func (s *Server) handleMarketplacePurchase(ctx context.Context, payload marketpl
 		plan += " (free trial)"
 	}
 
-	details := fmt.Sprintf(
+	return fmt.Sprintf(
 		"**Plan:** %s\n**Account type:** %s\n**Effective:** <t:%d:F>",
 		plan, purchase.Account.Type, payload.EffectiveDate.Unix(),
 	)
-
-	container, err := json.Marshal(map[string]any{
-		componentType:  17,
-		"accent_color": color,
-		componentChildren: []map[string]any{
-			{
-				componentType: 9,
-				componentChildren: []map[string]any{
-					{componentType: 10, componentContent: "### " + title},
-					{componentType: 10, componentContent: "[" + login + "](" + profile + ")"},
-				},
-				"accessory": map[string]any{
-					componentType: 11,
-					"media":       map[string]any{"url": fmt.Sprintf("https://avatars.githubusercontent.com/u/%d?v=4", purchase.Account.ID)},
-					"description": login + "'s avatar",
-				},
-			},
-			{componentType: 14, "divider": true, "spacing": 1},
-			{componentType: 10, componentContent: details},
-			{
-				componentType: 1,
-				componentChildren: []map[string]any{
-					{componentType: 2, "style": 5, "label": "View on GitHub", "url": profile},
-				},
-			},
-		},
-	})
-	if err == nil {
-		err = s.discordClient.SendWebhook(ctx, discord.WebhookPayload{
-			Components: []json.RawMessage{container},
-			Flags:      discord.FlagIsComponentsV2,
-		})
-	}
-
-	if err != nil {
-		s.logger.Error("sending marketplace notification to discord", "error", err, "action", payload.Action)
-	}
 }
 
 // handleIssueComment runs a command from a pull request comment when its author
