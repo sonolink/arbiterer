@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 )
@@ -53,6 +54,10 @@ func (c *Client) SendWebhook(ctx context.Context, payload WebhookPayload) error 
 
 	req, err := c.newRequest(ctx, http.MethodPost, path, bytes.NewReader(body))
 	if err != nil {
+		if cause := errors.Unwrap(err); cause != nil {
+			err = cause
+		}
+
 		return fmt.Errorf("discord: creating webhook request: %w", err)
 	}
 
@@ -60,6 +65,10 @@ func (c *Client) SendWebhook(ctx context.Context, payload WebhookPayload) error 
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
+		if cause := errors.Unwrap(err); cause != nil {
+			err = cause
+		}
+
 		return fmt.Errorf("discord: sending webhook: %w", err)
 	}
 	defer resp.Body.Close()
