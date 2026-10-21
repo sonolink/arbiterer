@@ -394,8 +394,7 @@ func (s *Server) closedByApp(
 		return false, err
 	}
 
-	return closedAt != nil &&
-		closedAt.Truncate(time.Second).Equal(record.ClosedAt.Truncate(time.Second)), nil
+	return closedAt != nil && sameClosedAt(*closedAt, record.ClosedAt), nil
 }
 
 // reactToCommand adds a reaction to the command comment.

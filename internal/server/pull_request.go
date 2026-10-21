@@ -113,6 +113,12 @@ func workflowRunURL(claims *github.Claims) string {
 	return fmt.Sprintf("https://github.com/%s/actions/runs/%d", claims.Repository, claims.RunID)
 }
 
+// sameClosedAt reports whether two close times name the same second, which is
+// the precision GitHub keeps across payloads.
+func sameClosedAt(a, b time.Time) bool {
+	return a.Truncate(time.Second).Equal(b.Truncate(time.Second))
+}
+
 // handleGitHubPullRequestClose answers POST /v1/github/pulls/close.
 func (s *Server) handleGitHubPullRequestClose(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
@@ -282,7 +288,7 @@ func (s *Server) openIfAutoClosed(ctx context.Context, repositoryID int64, repo 
 		return openResponse{Reason: "already open"}, nil
 	}
 
-	if !pr.ClosedAt.Truncate(time.Second).Equal(record.ClosedAt.Truncate(time.Second)) {
+	if !sameClosedAt(pr.ClosedAt, record.ClosedAt) {
 		if err := s.store.DeleteAutoClosedPullRequest(ctx, repositoryID, issueNumber); err != nil {
 			return openResponse{}, err
 		}
