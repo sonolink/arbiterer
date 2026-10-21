@@ -41,8 +41,10 @@ const (
 	// has not yet authorized Discord. It is never served by resolve.
 	commentGitHubVerified commentStatus = "github_verified"
 
-	commentUnlinked    commentStatus = "unlinked"
-	commentLinked      commentStatus = "linked"
+	commentUnlinked commentStatus = "unlinked"
+	commentLinked   commentStatus = "linked"
+	commentPassed   commentStatus = "passed"
+
 	commentRevoked     commentStatus = "revoked"
 	commentRulesFailed commentStatus = "rules_failed"
 )
@@ -53,7 +55,7 @@ func setupSteps(status commentStatus, linkURL string) []setupStep {
 	authorizeDiscord := setupStep{text: "Authorize Discord"}
 
 	switch status {
-	case commentLinked:
+	case commentLinked, commentPassed:
 		// Nothing left to do; the comment confirms the link or clears an earlier ask.
 		authorizeGitHub.done = true
 		authorizeDiscord.done = true
@@ -78,7 +80,9 @@ func formatCommentBody(author string, status commentStatus, linkURL string) stri
 
 	switch status {
 	case commentLinked:
-		b.WriteString("your GitHub and Discord accounts are linked.")
+		b.WriteString("your GitHub and Discord accounts are linked. Arbiterer is finishing the check.")
+	case commentPassed:
+		b.WriteString("you're all set — this pull request passes the check.")
 	case commentRevoked:
 		b.WriteString("your Discord link has expired or was revoked. Please follow these steps to link it again:")
 	case commentRulesFailed:
@@ -122,9 +126,9 @@ func formatCommentBody(author string, status commentStatus, linkURL string) stri
 }
 
 // setupCommentNeedsWrite reports whether the setup comment has to be posted or
-// updated. A linked contributor needs no comment unless an earlier one asked
-// them to act or has opted in to a comment confirming the link, and a comment
-// without a link to refresh only changes with the status.
+// updated. A linked or passing contributor needs no comment unless an earlier
+// one asked them to act or has opted in to a comment, and a comment without a
+// link to refresh only changes with the status.
 func setupCommentNeedsWrite(
 	stored *storage.SetupComment,
 	status commentStatus,
@@ -132,7 +136,12 @@ func setupCommentNeedsWrite(
 	commentOnLinked bool,
 ) bool {
 	if stored == nil {
-		return status != commentLinked || commentOnLinked
+		return (status != commentLinked && status != commentPassed) || commentOnLinked
+	}
+
+	if status == commentLinked && linkURL == "" &&
+		(stored.Status == string(commentPassed) || stored.Status == string(commentRulesFailed)) {
+		return false
 	}
 
 	return stored.Status != string(status) || linkURL != ""
@@ -141,6 +150,30 @@ func setupCommentNeedsWrite(
 // syncSetupComment reconciles the comment telling a contributor what to do.
 func (s *Server) syncSetupComment(
 	ctx context.Context,
+	repositoryID int64,
+	repo string,
+	issueNumber int64,
+	status commentStatus,
+	linkURL string,
+	commentOnLinked bool,
+) error {
+	return s.syncSetupCommentWithToken(
+		ctx,
+		"",
+		repositoryID,
+		repo,
+		issueNumber,
+		status,
+		linkURL,
+		commentOnLinked,
+	)
+}
+
+// syncSetupCommentWithToken reconciles the setup comment using token when it is
+// given, creating an installation token otherwise.
+func (s *Server) syncSetupCommentWithToken(
+	ctx context.Context,
+	token string,
 	repositoryID int64,
 	repo string,
 	issueNumber int64,
@@ -161,9 +194,11 @@ func (s *Server) syncSetupComment(
 		return nil
 	}
 
-	token, err := s.githubClient.CreateInstallationToken(ctx, repositoryID, repo)
-	if err != nil {
-		return fmt.Errorf("creating installation token: %w", err)
+	if token == "" {
+		token, err = s.githubClient.CreateInstallationToken(ctx, repositoryID, repo)
+		if err != nil {
+			return fmt.Errorf("creating installation token: %w", err)
+		}
 	}
 
 	author, err := s.githubClient.FetchIssueAuthor(ctx, token, repo, issueNumber)
@@ -187,7 +222,7 @@ func (s *Server) syncSetupComment(
 		commentDeleted := errors.As(err, &apiErr) && apiErr.Status == http.StatusNotFound
 
 		switch {
-		case err == nil, commentDeleted && status == commentLinked:
+		case err == nil, commentDeleted && (status == commentLinked || status == commentPassed):
 			return s.store.UpsertSetupComment(ctx, comment)
 		case !commentDeleted:
 			return fmt.Errorf("updating comment: %w", err)
@@ -200,6 +235,60 @@ func (s *Server) syncSetupComment(
 	}
 
 	return s.store.UpsertSetupComment(ctx, comment)
+}
+
+// notifyPassed records that the author now passes the check. It updates only
+// an existing setup comment: with comment-on-linked disabled, a passing run
+// must not start commenting on authors who never needed instructions.
+func (s *Server) notifyPassed(ctx context.Context, claims *github.Claims, issueNumber int64) {
+	if _, err := s.store.SetupCommentByPullRequest(ctx, claims.RepositoryID, issueNumber); err != nil {
+		if errors.Is(err, storage.ErrNotFound) {
+			return
+		}
+
+		s.logger.Error(
+			"looking up setup comment",
+			"error", err,
+			"repository", claims.Repository,
+			"issue_number", issueNumber,
+		)
+
+		return
+	}
+
+	if err := s.syncSetupComment(
+		ctx,
+		claims.RepositoryID,
+		claims.Repository,
+		issueNumber,
+		commentPassed,
+		"",
+		false,
+	); err != nil {
+		s.logSetupCommentError(err)
+	}
+}
+
+// notifyRulesFailed reconciles the setup comment to explain that the author did
+// not satisfy the rules, reusing token when the caller already created one.
+func (s *Server) notifyRulesFailed(
+	ctx context.Context,
+	claims *github.Claims,
+	issueNumber int64,
+	token string,
+) {
+	if err := s.syncSetupCommentWithToken(
+		ctx,
+		token,
+		claims.RepositoryID,
+		claims.Repository,
+		issueNumber,
+		commentRulesFailed,
+		workflowRunURL(claims),
+		false,
+	); err != nil {
+		s.logSetupCommentError(err)
+	}
 }
 
 // logSetupCommentError logs a failed comment sync. A missing app installation

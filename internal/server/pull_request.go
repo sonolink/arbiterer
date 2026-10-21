@@ -27,9 +27,17 @@ import (
 	"github.com/sonolink/arbiterer/internal/storage"
 )
 
+type pullRequestRequest struct {
+	IssueNumber int64 `json:"issue_number"` // GitHub's API addresses pull requests as issues.
+}
+
+func (pr pullRequestRequest) issueNumber() int64 {
+	return pr.IssueNumber
+}
+
 type closeRequest struct {
-	IssueNumber int64 `json:"issue_number"` // GitHub's API addresses PRs as issues.
-	RulesFailed bool  `json:"rules_failed,omitempty"`
+	pullRequestRequest
+	RulesFailed bool `json:"rules_failed,omitempty"`
 }
 
 type closeResponse struct {
@@ -37,41 +45,106 @@ type closeResponse struct {
 	Recorded bool `json:"recorded"`
 }
 
+// issueRequest is implemented by every pull request action body.
+type issueRequest interface {
+	issueNumber() int64
+}
+
+// decodePullRequestRequest authenticates the caller and decodes a pull request
+// action body, rejecting a missing issue number.
+func (s *Server) decodePullRequestRequest(
+	w http.ResponseWriter,
+	r *http.Request,
+	req issueRequest,
+) (*github.Claims, bool) {
+	claims, ok := s.verifyBearer(w, r)
+	if !ok {
+		return nil, false
+	}
+
+	if !s.decodeBody(w, r, req) {
+		return nil, false
+	}
+
+	if req.issueNumber() == 0 {
+		s.writeProblem(w, r, http.StatusBadRequest, "issue_number is required")
+
+		return nil, false
+	}
+
+	return claims, true
+}
+
+// loadPullRequest creates an installation token and fetches the pull request.
+func (s *Server) loadPullRequest(
+	ctx context.Context,
+	repositoryID int64,
+	repo string,
+	issueNumber int64,
+) (string, *github.PullRequest, error) {
+	token, err := s.githubClient.CreateInstallationToken(ctx, repositoryID, repo)
+	if err != nil {
+		return "", nil, fmt.Errorf("creating installation token: %w", err)
+	}
+
+	pr, err := s.githubClient.FetchPullRequest(ctx, token, repo, issueNumber)
+	if err != nil {
+		return "", nil, fmt.Errorf("fetching pull request: %w", err)
+	}
+
+	return token, pr, nil
+}
+
+// workflowRunURL returns the Actions run or job URL for the workflow run.
+func workflowRunURL(claims *github.Claims) string {
+	if claims.RunID == 0 {
+		return ""
+	}
+
+	if claims.CheckRunID != 0 {
+		return fmt.Sprintf(
+			"https://github.com/%s/actions/runs/%d/job/%d",
+			claims.Repository,
+			claims.RunID,
+			claims.CheckRunID,
+		)
+	}
+
+	return fmt.Sprintf("https://github.com/%s/actions/runs/%d", claims.Repository, claims.RunID)
+}
+
+// sameClosedAt reports whether two close times name the same second, which is
+// the precision GitHub keeps across payloads.
+func sameClosedAt(a, b time.Time) bool {
+	return a.Truncate(time.Second).Equal(b.Truncate(time.Second))
+}
+
 // handleGitHubPullRequestClose answers POST /v1/github/pulls/close.
 func (s *Server) handleGitHubPullRequestClose(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	claims, ok := s.verifyBearer(w, r)
+	var req closeRequest
+
+	claims, ok := s.decodePullRequestRequest(w, r, &req)
 	if !ok {
 		return
 	}
 
-	var req closeRequest
-	if !s.decodeBody(w, r, &req) {
-		return
-	}
-
-	if req.IssueNumber == 0 {
-		s.writeProblem(w, r, http.StatusBadRequest, "issue_number is required")
-		return
-	}
-
-	token, err := s.githubClient.CreateInstallationToken(ctx, claims.RepositoryID, claims.Repository)
+	token, pr, err := s.loadPullRequest(ctx, claims.RepositoryID, claims.Repository, req.IssueNumber)
 	if err != nil {
-		s.logger.Error("creating installation token", "error", err)
+		s.logger.Error(
+			"loading pull request",
+			"error", err,
+			"repository", claims.Repository,
+			"issue_number", req.IssueNumber,
+		)
 		s.writeProblem(w, r, http.StatusInternalServerError, "internal error")
-		return
-	}
 
-	pr, err := s.githubClient.FetchPullRequest(ctx, token, claims.Repository, req.IssueNumber)
-	if err != nil {
-		s.logger.Error("fetching pull request", "error", err)
-		s.writeProblem(w, r, http.StatusInternalServerError, "internal error")
 		return
 	}
 
 	if req.RulesFailed && !pr.Merged {
-		s.notifyRulesFailed(ctx, claims, req.IssueNumber)
+		s.notifyRulesFailed(ctx, claims, req.IssueNumber, token)
 	}
 
 	if pr.State != "open" {
@@ -101,85 +174,51 @@ func (s *Server) handleGitHubPullRequestClose(w http.ResponseWriter, r *http.Req
 	s.writeJSON(w, http.StatusOK, closeResponse{Closed: true, Recorded: recorded})
 }
 
-type rulesFailedRequest struct {
-	IssueNumber int64 `json:"issue_number"` // GitHub's API addresses PRs as issues.
-}
-
 // handleGitHubPullRequestRulesFailed answers POST /v1/github/pulls/rules-failed.
 func (s *Server) handleGitHubPullRequestRulesFailed(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	claims, ok := s.verifyBearer(w, r)
+	var req pullRequestRequest
+
+	claims, ok := s.decodePullRequestRequest(w, r, &req)
 	if !ok {
 		return
 	}
 
-	var req rulesFailedRequest
-	if !s.decodeBody(w, r, &req) {
-		return
-	}
-
-	if req.IssueNumber == 0 {
-		s.writeProblem(w, r, http.StatusBadRequest, "issue_number is required")
-		return
-	}
-
-	token, err := s.githubClient.CreateInstallationToken(ctx, claims.RepositoryID, claims.Repository)
+	token, pr, err := s.loadPullRequest(ctx, claims.RepositoryID, claims.Repository, req.IssueNumber)
 	if err != nil {
-		s.logger.Error("creating installation token", "error", err)
+		s.logger.Error(
+			"loading pull request",
+			"error", err,
+			"repository", claims.Repository,
+			"issue_number", req.IssueNumber,
+		)
 		s.writeProblem(w, r, http.StatusInternalServerError, "internal error")
-		return
-	}
 
-	pr, err := s.githubClient.FetchPullRequest(ctx, token, claims.Repository, req.IssueNumber)
-	if err != nil {
-		s.logger.Error("fetching pull request", "error", err)
-		s.writeProblem(w, r, http.StatusInternalServerError, "internal error")
 		return
 	}
 
 	if !pr.Merged {
-		s.notifyRulesFailed(ctx, claims, req.IssueNumber)
+		s.notifyRulesFailed(ctx, claims, req.IssueNumber, token)
 	}
 
 	s.writeJSON(w, http.StatusOK, struct{}{})
 }
 
-// notifyRulesFailed reconciles the setup comment to explain that the author did
-// not satisfy the rules.
-func (s *Server) notifyRulesFailed(ctx context.Context, claims *github.Claims, issueNumber int64) {
-	if err := s.syncSetupComment(
-		ctx,
-		claims.RepositoryID,
-		claims.Repository,
-		issueNumber,
-		commentRulesFailed,
-		workflowRunURL(claims),
-		false,
-	); err != nil {
-		s.logSetupCommentError(err)
-	}
-}
+// handleGitHubPullRequestPassed answers POST /v1/github/pulls/passed.
+func (s *Server) handleGitHubPullRequestPassed(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
 
-func workflowRunURL(claims *github.Claims) string {
-	if claims.RunID == 0 {
-		return ""
+	var req pullRequestRequest
+
+	claims, ok := s.decodePullRequestRequest(w, r, &req)
+	if !ok {
+		return
 	}
 
-	if claims.CheckRunID != 0 {
-		return fmt.Sprintf(
-			"https://github.com/%s/actions/runs/%d/job/%d",
-			claims.Repository,
-			claims.RunID,
-			claims.CheckRunID,
-		)
-	}
+	s.notifyPassed(ctx, claims, req.IssueNumber)
 
-	return fmt.Sprintf("https://github.com/%s/actions/runs/%d", claims.Repository, claims.RunID)
-}
-
-type openRequest struct {
-	IssueNumber int64 `json:"issue_number"` // GitHub's API addresses PRs as issues.
+	s.writeJSON(w, http.StatusOK, struct{}{})
 }
 
 type openResponse struct {
@@ -191,18 +230,10 @@ type openResponse struct {
 func (s *Server) handleGitHubPullRequestOpen(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	claims, ok := s.verifyBearer(w, r)
+	var req pullRequestRequest
+
+	claims, ok := s.decodePullRequestRequest(w, r, &req)
 	if !ok {
-		return
-	}
-
-	var req openRequest
-	if !s.decodeBody(w, r, &req) {
-		return
-	}
-
-	if req.IssueNumber == 0 {
-		s.writeProblem(w, r, http.StatusBadRequest, "issue_number is required")
 		return
 	}
 
@@ -236,12 +267,7 @@ func (s *Server) openIfAutoClosed(ctx context.Context, repositoryID int64, repo 
 		return openResponse{}, err
 	}
 
-	token, err := s.githubClient.CreateInstallationToken(ctx, repositoryID, repo)
-	if err != nil {
-		return openResponse{}, err
-	}
-
-	pr, err := s.githubClient.FetchPullRequest(ctx, token, repo, issueNumber)
+	token, pr, err := s.loadPullRequest(ctx, repositoryID, repo, issueNumber)
 	if err != nil {
 		return openResponse{}, err
 	}
@@ -262,7 +288,7 @@ func (s *Server) openIfAutoClosed(ctx context.Context, repositoryID int64, repo 
 		return openResponse{Reason: "already open"}, nil
 	}
 
-	if !pr.ClosedAt.Truncate(time.Second).Equal(record.ClosedAt.Truncate(time.Second)) {
+	if !sameClosedAt(pr.ClosedAt, record.ClosedAt) {
 		if err := s.store.DeleteAutoClosedPullRequest(ctx, repositoryID, issueNumber); err != nil {
 			return openResponse{}, err
 		}

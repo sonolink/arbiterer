@@ -116,6 +116,24 @@ func (c *Client) UpdateComment(ctx context.Context, token, repo string, commentI
 	return nil
 }
 
+// CreateCommentReaction adds a reaction to an issue (pull request) comment. content is one of
+// GitHub's reaction names, such as "+1" or "eyes":
+// https://docs.github.com/en/rest/reactions/reactions#create-reaction-for-an-issue-comment
+func (c *Client) CreateCommentReaction(ctx context.Context, token, repo string, commentID int64, content string) error {
+	if err := c.sendRequest(
+		ctx,
+		http.MethodPost,
+		fmt.Sprintf("/repos/%s/issues/comments/%d/reactions", repo, commentID),
+		token,
+		map[string]string{"content": content},
+		nil,
+	); err != nil {
+		return fmt.Errorf("github: reacting to comment %d: %w", commentID, err)
+	}
+
+	return nil
+}
+
 // ClosePullRequest closes the given pull request and returns it with GitHub's
 // ClosedAt.
 func (c *Client) ClosePullRequest(ctx context.Context, token, repo string, issueNumber int64) (*PullRequest, error) {
@@ -127,6 +145,22 @@ func (c *Client) OpenPullRequest(ctx context.Context, token, repo string, issueN
 	_, err := c.setPullRequestState(ctx, token, repo, issueNumber, "open")
 
 	return err
+}
+
+// RerunWorkflowRun asks GitHub to re-run a whole workflow run.
+func (c *Client) RerunWorkflowRun(ctx context.Context, token, repo string, runID int64) error {
+	if err := c.sendRequest(
+		ctx,
+		http.MethodPost,
+		fmt.Sprintf("/repos/%s/actions/runs/%d/rerun", repo, runID),
+		token,
+		map[string]any{},
+		nil,
+	); err != nil {
+		return fmt.Errorf("github: rerunning workflow run %d: %w", runID, err)
+	}
+
+	return nil
 }
 
 // RerunJob asks GitHub to re-run a single workflow job.

@@ -19,6 +19,7 @@ CREATE TYPE setup_comment_status AS ENUM (
   'unlinked',
   'github_verified',
   'linked',
+  'passed',
   'revoked',
   'not_a_member',
   'rules_failed'
@@ -41,9 +42,18 @@ CREATE TABLE auto_closed_pull_requests (
   PRIMARY KEY (repository_id, issue_number)
 );
 
+CREATE TABLE pull_request_runs (
+  repository_id BIGINT NOT NULL,
+  issue_number BIGINT NOT NULL,
+  run_id BIGINT NOT NULL,
+  last_recheck_at TIMESTAMPTZ,
+  PRIMARY KEY (repository_id, issue_number)
+);
+
 -- +goose Down
 DROP TABLE IF EXISTS github_discord_connections CASCADE;
 DROP TABLE IF EXISTS discord_users CASCADE;
 DROP TABLE IF EXISTS setup_comments CASCADE;
 DROP TABLE IF EXISTS auto_closed_pull_requests CASCADE;
+DROP TABLE IF EXISTS pull_request_runs CASCADE;
 DROP TYPE IF EXISTS setup_comment_status;
