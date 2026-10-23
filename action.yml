@@ -1,4 +1,4 @@
-name: Resolve Discord link
+name: Arbiterer
 description: Resolve a GitHub user's linked Discord account through Arbiterer using GitHub OIDC.
 branding:
   icon: link
