@@ -23,7 +23,10 @@ import (
 	"github.com/sonolink/arbiterer/internal/storage"
 )
 
-const testLinkURL = "https://arbiterer.test/v1/link?token=abc"
+const (
+	testLinkURL = "https://arbiterer.test/v1/link?token=abc"
+	testRulesURL = "https://github.com/" + testRepository + "/blob/" + testWorkflowSHA + "/" + testWorkflowPath + "#L23-L50"
+)
 
 // TestSetupCommentNeedsWrite covers when a contributor is worth telling
 // something. Writing when nothing changed costs an API call per event, and not
@@ -144,8 +147,10 @@ func TestFormatCommentBody(t *testing.T) {
 	tests := map[string]struct {
 		status    commentStatus
 		linkURL   string
+		rulesURL  string
 		wantSteps bool
 		wantLink  bool
+		wantRules bool
 	}{
 		"an unlinked author is given the steps": {
 			status:    commentUnlinked,
@@ -161,13 +166,26 @@ func TestFormatCommentBody(t *testing.T) {
 		"failing the rules is not a linking problem, so no steps": {
 			status:    commentRulesFailed,
 			linkURL:   testLinkURL,
+			rulesURL:  testRulesURL,
+			wantSteps: false,
+			wantLink:  true,
+			wantRules: true,
+		},
+		"a rules failure still links the rules without a run": {
+			status:    commentRulesFailed,
+			rulesURL:  testRulesURL,
+			wantSteps: false,
+			wantRules: true,
+		},
+		"and the run is linked when the workflow is not": {
+			status:    commentRulesFailed,
+			linkURL:   testLinkURL,
 			wantSteps: false,
 			wantLink:  true,
 		},
-		"and the run link is omitted when there is none": {
+		"and neither link is rendered when there is none": {
 			status:    commentRulesFailed,
 			wantSteps: false,
-			wantLink:  false,
 		},
 	}
 
@@ -175,7 +193,7 @@ func TestFormatCommentBody(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
-			body := formatCommentBody("vmphase", tc.status, tc.linkURL)
+			body := formatCommentBody("vmphase", tc.status, tc.linkURL, tc.rulesURL)
 
 			if !strings.HasPrefix(body, "@vmphase, ") {
 				t.Errorf("body does not open by addressing the author: %q", body)
@@ -187,6 +205,10 @@ func TestFormatCommentBody(t *testing.T) {
 
 			if link := strings.Contains(body, testLinkURL); link != tc.wantLink {
 				t.Errorf("body carries the link = %t, want %t: %q", link, tc.wantLink, body)
+			}
+
+			if rules := strings.Contains(body, testRulesURL); rules != tc.wantRules {
+				t.Errorf("body carries the rules link = %t, want %t: %q", rules, tc.wantRules, body)
 			}
 		})
 	}
