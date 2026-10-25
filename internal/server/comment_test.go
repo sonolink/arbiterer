@@ -24,8 +24,8 @@ import (
 )
 
 const (
-	testLinkURL = "https://arbiterer.test/v1/link?token=abc"
-	testRulesURL = "https://github.com/" + testRepository + "/blob/" + testWorkflowSHA + "/" + testWorkflowPath + "#L23-L50"
+	testLinkURL  = "https://arbiterer.test/v1/link?token=abc"
+	testRulesURL = "https://github.com/" + testRepository + "/blob/" + testWorkflowSHA + "/" + testWorkflowPath + "#L2-L4"
 )
 
 // TestSetupCommentNeedsWrite covers when a contributor is worth telling

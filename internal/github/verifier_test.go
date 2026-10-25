@@ -19,7 +19,7 @@ package github
 import "testing"
 
 const (
-	testRepository = "sonolink/arbiterer"
+	testRepository  = "sonolink/arbiterer"
 	testWorkflowSHA = "0123456789abcdef0123456789abcdef01234567"
 )
 
