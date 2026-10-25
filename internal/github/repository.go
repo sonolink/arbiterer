@@ -18,8 +18,11 @@ package github
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"net/http"
+	"net/url"
+	"strings"
 	"time"
 )
 
@@ -45,6 +48,43 @@ func (c *Client) FetchPullRequest(ctx context.Context, token, repo string, issue
 	}
 
 	return &pr, nil
+}
+
+// FetchFileContents returns the text of the file at path on the given ref.
+// The contents API serves files as base64, so the response is decoded here.
+func (c *Client) FetchFileContents(ctx context.Context, token, repo, path, ref string) (string, error) {
+	u := url.URL{Path: "/repos/" + repo + "/contents/" + path}
+	if ref != "" {
+		u.RawQuery = url.Values{"ref": {ref}}.Encode()
+	}
+
+	var contents struct {
+		Type     string `json:"type"`
+		Encoding string `json:"encoding"`
+		Content  string `json:"content"`
+	}
+
+	if err := c.sendRequest(ctx, http.MethodGet, u.RequestURI(), token, nil, &contents); err != nil {
+		return "", fmt.Errorf("github: fetching contents of %s: %w", path, err)
+	}
+
+	if contents.Encoding != "base64" {
+		return "", fmt.Errorf(
+			"github: contents of %s are not base64 (type %q, encoding %q)",
+			path,
+			contents.Type,
+			contents.Encoding,
+		)
+	}
+
+	decoded, err := base64.StdEncoding.DecodeString(
+		strings.NewReplacer("\n", "", "\r", "").Replace(contents.Content),
+	)
+	if err != nil {
+		return "", fmt.Errorf("github: decoding contents of %s: %w", path, err)
+	}
+
+	return string(decoded), nil
 }
 
 // FetchIssueAuthor returns the user who opened the given issue (pull request).

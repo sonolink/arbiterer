@@ -18,9 +18,12 @@ package server
 
 import (
 	"context"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
+	"strings"
 	"time"
 
 	"github.com/sonolink/arbiterer/internal/github"
@@ -111,6 +114,140 @@ func workflowRunURL(claims *github.Claims) string {
 	}
 
 	return fmt.Sprintf("https://github.com/%s/actions/runs/%d", claims.Repository, claims.RunID)
+}
+
+// workflowFile returns the workflow file that ran the check and the ref to link
+// it at. Only the pull request's own repository and a non-pull ref are accepted.
+func workflowFile(claims *github.Claims) (path, ref string, ok bool) {
+	at := strings.LastIndex(claims.WorkflowRef, "@refs/")
+	if at < 0 {
+		return "", "", false
+	}
+
+	parts := strings.SplitN(claims.WorkflowRef[:at], "/", 3)
+	if len(parts) != 3 || !strings.EqualFold(parts[0]+"/"+parts[1], claims.Repository) {
+		return "", "", false
+	}
+
+	path = parts[2]
+	if !strings.HasPrefix(path, ".github/workflows/") ||
+		(!strings.HasSuffix(path, ".yml") && !strings.HasSuffix(path, ".yaml")) ||
+		strings.Contains(path, "..") {
+		return "", "", false
+	}
+
+	if sha := claims.WorkflowSHA; len(sha) == 40 {
+		if _, err := hex.DecodeString(sha); err == nil {
+			return path, sha, true
+		}
+	}
+
+	ref = strings.TrimPrefix(claims.WorkflowRef[at+1:], "refs/heads/")
+	if ref == "" || strings.HasPrefix(ref, "refs/") {
+		return "", "", false
+	}
+
+	return path, ref, true
+}
+
+// isRulesBlock reports whether line opens an inline rules block.
+func isRulesBlock(line string) bool {
+	key, value, ok := strings.Cut(strings.TrimSpace(line), ":")
+	if !ok || strings.TrimSpace(key) != "rules" {
+		return false
+	}
+
+	value = strings.TrimSpace(value)
+
+	return strings.HasPrefix(value, "|") || strings.HasPrefix(value, ">")
+}
+
+// rulesLines returns the 1-based range of the first inline rules block.
+func rulesLines(source string) (start, end int, ok bool) {
+	lines := strings.Split(strings.ReplaceAll(source, "\r\n", "\n"), "\n")
+
+	for i, line := range lines {
+		if !isRulesBlock(line) {
+			continue
+		}
+
+		keyIndent := len(line) - len(strings.TrimLeft(line, " \t"))
+		start, end = i+2, i+1
+
+		for j := i + 1; j < len(lines); j++ {
+			body := lines[j]
+			if strings.TrimSpace(body) == "" {
+				continue
+			}
+
+			if len(body)-len(strings.TrimLeft(body, " \t")) <= keyIndent {
+				break
+			}
+
+			end = j + 1
+		}
+
+		if end >= start {
+			return start, end, true
+		}
+
+		return 0, 0, false
+	}
+
+	return 0, 0, false
+}
+
+// rulesFileURL links the rules a failed pull request was judged by, falling back
+// to the workflow file, or to no link, when the block cannot be resolved.
+func (s *Server) rulesFileURL(ctx context.Context, token string, claims *github.Claims) string {
+	path, ref, ok := workflowFile(claims)
+	if !ok {
+		return ""
+	}
+
+	base := fmt.Sprintf(
+		"https://github.com/%s/blob/%s/%s",
+		claims.Repository,
+		escapeURLPath(ref),
+		escapeURLPath(path),
+	)
+	if token == "" {
+		return base
+	}
+
+	source, err := s.githubClient.FetchFileContents(ctx, token, claims.Repository, path, ref)
+	if err != nil {
+		s.logger.Debug(
+			"fetching the workflow file for the rules link",
+			"error", err,
+			"repository", claims.Repository,
+			"path", path,
+		)
+
+		return base
+	}
+
+	start, end, ok := rulesLines(source)
+	if !ok {
+		return base
+	}
+
+	if start == end {
+		return fmt.Sprintf("%s#L%d", base, start)
+	}
+
+	return fmt.Sprintf("%s#L%d-L%d", base, start, end)
+}
+
+// escapeURLPath escapes each segment of a repository path or ref, keeping the
+// slashes that separate them.
+func escapeURLPath(s string) string {
+	segments := strings.Split(s, "/")
+	for i, segment := range segments {
+		segments[i] = url.PathEscape(segment)
+	}
+
+	return strings.Join(segments, "/")
 }
 
 // sameClosedAt reports whether two close times name the same second, which is
