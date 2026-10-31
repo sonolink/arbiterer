@@ -71,9 +71,9 @@ func setupSteps(status commentStatus, linkURL string) []setupStep {
 	return []setupStep{authorizeGitHub, authorizeDiscord}
 }
 
-// formatCommentBody renders the setup comment for a contributor in the given
-// status, with completed steps struck through.
-func formatCommentBody(author string, status commentStatus, linkURL string) string {
+// formatCommentBody renders the setup comment for a contributor, with completed
+// steps struck through and the rules linked when they failed.
+func formatCommentBody(author string, status commentStatus, linkURL, rulesURL string) string {
 	var b strings.Builder
 
 	fmt.Fprintf(&b, "@%s, ", author)
@@ -86,10 +86,18 @@ func formatCommentBody(author string, status commentStatus, linkURL string) stri
 	case commentRevoked:
 		b.WriteString("your Discord link has expired or was revoked. Please follow these steps to link it again:")
 	case commentRulesFailed:
-		b.WriteString("you didn't satisfy the pre-defined rules.")
+		b.WriteString("you didn't satisfy ")
+
+		if rulesURL != "" {
+			fmt.Fprintf(&b, "[the pre-defined rules](%s)", rulesURL)
+		} else {
+			b.WriteString("the pre-defined rules")
+		}
+
+		b.WriteString(".")
 
 		if linkURL != "" {
-			fmt.Fprintf(&b, " [See more here](%s).", linkURL)
+			fmt.Fprintf(&b, " [See the failed run](%s).", linkURL)
 		}
 
 		return b.String()
@@ -165,6 +173,7 @@ func (s *Server) syncSetupComment(
 		issueNumber,
 		status,
 		linkURL,
+		"",
 		commentOnLinked,
 	)
 }
@@ -179,6 +188,7 @@ func (s *Server) syncSetupCommentWithToken(
 	issueNumber int64,
 	status commentStatus,
 	linkURL string,
+	rulesURL string,
 	commentOnLinked bool,
 ) error {
 	if issueNumber == 0 {
@@ -206,7 +216,7 @@ func (s *Server) syncSetupCommentWithToken(
 		return fmt.Errorf("fetching issue author (%d): %w", issueNumber, err)
 	}
 
-	body := formatCommentBody(author.Login, status, linkURL)
+	body := formatCommentBody(author.Login, status, linkURL, rulesURL)
 	comment := &storage.SetupComment{
 		RepositoryID: repositoryID,
 		IssueNumber:  issueNumber,
@@ -285,6 +295,7 @@ func (s *Server) notifyRulesFailed(
 		issueNumber,
 		commentRulesFailed,
 		workflowRunURL(claims),
+		s.rulesFileURL(ctx, token, claims),
 		false,
 	); err != nil {
 		s.logSetupCommentError(err)
