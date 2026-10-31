@@ -1,4 +1,4 @@
-const audience = process.env.ARBITERER_OIDC_AUDIENCE?.trim() || "https://arbiterer.com";
+const audience = process.env.ARBITERER_OIDC_AUDIENCE?.trim() || "https://arbiterer.sonolink.dev";
 const serverUrl = process.env.ARBITERER_SERVER_URL?.trim() || "https://api.arbiterer.sonolink.dev/v1";
 const maxRetries = Number(process.env.ARBITERER_ERROR_MAX_RETRIES?.trim() || 3);
 const maxRetriesLimit = 10;
