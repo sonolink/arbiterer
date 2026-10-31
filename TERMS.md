@@ -2,7 +2,7 @@
 
 Effective date: October 19, 2026
 
-Applies to: the Service, including the linking flow at `arbiterer.com` and the API at `api.arbiterer.com`, the App, and the Action when it connects to the Service.
+Applies to: the Service, including the linking flow at `arbiterer.sonolink.dev` and the API at `api.arbiterer.sonolink.dev`, the App, and the Action when it connects to the Service.
 Related: [Privacy Policy](https://github.com/sonolink/arbiterer/blob/main/PRIVACY.md) · [Security Policy](https://github.com/sonolink/arbiterer/blob/main/.github/SECURITY.md)
 
 ## 1. Agreement to these Terms
@@ -16,13 +16,13 @@ If you only open a Contribution without linking accounts, the repository's Maint
 
 In these Terms:
 
-- **Service (or hosted Service):** the hosted Arbiterer service, made up of the App, the linking flow at `arbiterer.com`, the API at `api.arbiterer.com`, and the Action when it connects to the Service.
+- **Service (or hosted Service):** the hosted Arbiterer service, made up of the App, the linking flow at `arbiterer.sonolink.dev`, the API at `api.arbiterer.sonolink.dev`, and the Action when it connects to the Service.
 - **App:** the Arbiterer GitHub App.
 - **Action:** the `sonolink/arbiterer` GitHub Action, run through GitHub Actions.
 - **GitHub:** the GitHub platform and services operated by GitHub, Inc. or its affiliates.
 - **Discord:** the Discord platform and services operated by Discord Inc. or its affiliates.
 - **GitHub Actions:** GitHub's service for running automated workflows, including the workflow that runs the Action.
-- **linking flow:** the account-linking flow at `arbiterer.com`, where you sign in with GitHub and then authorize Discord.
+- **linking flow:** the account-linking flow at `arbiterer.sonolink.dev`, where you sign in with GitHub and then authorize Discord.
 - **account:** a GitHub account or a Discord account, as the context requires.
 - **Maintainer:** a person or organization that installs the App or configures the Action on a repository.
 - **Contribution:** a pull request submitted to a repository that uses the Service.

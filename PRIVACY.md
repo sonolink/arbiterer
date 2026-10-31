@@ -2,7 +2,7 @@
 
 Effective date: October 19, 2026
 
-This Privacy Policy applies to the App, the Action when it connects to the Service, the linking flow at `arbiterer.com`, and the API at `api.arbiterer.com`.
+This Privacy Policy applies to the App, the Action when it connects to the Service, the linking flow at `arbiterer.sonolink.dev`, and the API at `api.arbiterer.sonolink.dev`.
 
 Related: [Terms of Service](https://github.com/sonolink/arbiterer/blob/main/TERMS.md) · [Security Policy](https://github.com/sonolink/arbiterer/blob/main/.github/SECURITY.md)
 
