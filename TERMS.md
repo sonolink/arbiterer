@@ -239,7 +239,7 @@ These Terms are governed by the laws of the Netherlands, without regard to confl
 The competent courts of the Netherlands have exclusive jurisdiction, except where mandatory law gives you the right to bring a claim elsewhere.
 If you are a consumer, you keep the protection of the mandatory laws of your country of residence.
 
-Before filing a claim, please contact us at [admin@sonolink.dev](mailto:admin@sonolink.dev) so we can try to resolve the issue informally.
+Before filing a claim, please contact us at [arbiterer@sonolink.dev](mailto:arbiterer@sonolink.dev) so we can try to resolve the issue informally.
 Nothing in this section prevents either party from seeking interim, injunctive, or other equitable relief.
 
 ## 16. Changes to these Terms
@@ -263,7 +263,7 @@ There are no third-party beneficiaries, except for SonoLink's members, officers,
 
 ## Contact
 
-- Questions about these Terms: [admin@sonolink.dev](mailto:admin@sonolink.dev) or our [Discord server](https://discord.gg/tPHVWBPedt).
+- Questions about these Terms: [arbiterer@sonolink.dev](mailto:arbiterer@sonolink.dev) or our [Discord server](https://discord.gg/tPHVWBPedt).
 - Security issues: follow the [Security Policy](https://github.com/sonolink/arbiterer/blob/main/.github/SECURITY.md).
 - Do not report them in public issues.
-- Privacy requests: see the [Privacy Policy](https://github.com/sonolink/arbiterer/blob/main/PRIVACY.md) or email [admin@sonolink.dev](mailto:admin@sonolink.dev).
+- Privacy requests: see the [Privacy Policy](https://github.com/sonolink/arbiterer/blob/main/PRIVACY.md) or email [arbiterer@sonolink.dev](mailto:arbiterer@sonolink.dev).
