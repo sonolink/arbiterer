@@ -24,11 +24,11 @@ If you run your own copy, you are responsible for how it handles data.
 
 Arbiterer is run by the SonoLink Development Team ("SonoLink", "we", "us").
 For the Service, we are the controller for the data we store: link records (which GitHub account is linked to which Discord account for which repository), Discord tokens, and setup records (the comment the App posts on a pull request and its status).
-You can reach us at [admin@sonlink.dev](mailto:admin@sonlink.dev) or on our [Discord server](https://discord.gg/tPHVWBPedt).
+You can reach us at [admin@arbiterer.com](mailto:admin@arbiterer.com) or on our [Discord server](https://discord.gg/tPHVWBPedt).
 
 Maintainers are independent controllers for the Discord data their workflow receives and for what they do with it.
 They decide what their Rules request and where that data goes.
-If you need a data processing agreement, contact us at [admin@sonlink.dev](mailto:admin@sonlink.dev).
+If you need a data processing agreement, contact us at [admin@arbiterer.com](mailto:admin@arbiterer.com).
 
 ## Data we collect
 
@@ -125,7 +125,7 @@ You can revoke GitHub access under Authorized GitHub Apps in your GitHub setting
 If you are a Maintainer, you can uninstall the App and remove the Action from your workflow.
 Revoking access does not delete data that is already stored.
 
-To access, correct, or delete your data, email [admin@sonlink.dev](mailto:admin@sonlink.dev).
+To access, correct, or delete your data, email [admin@arbiterer.com](mailto:admin@arbiterer.com).
 Please include your GitHub username or ID, your Discord username or ID, and the repository involved.
 We may ask you to verify that you control the accounts.
 We will respond within the time required by law.
@@ -150,7 +150,7 @@ For significant changes, we will give at least 30 days' notice in a prominent wa
 
 ## Contact
 
-- Privacy questions and requests: [admin@sonlink.dev](mailto:admin@sonlink.dev)
+- Privacy questions and requests: [admin@arbiterer.com](mailto:admin@arbiterer.com)
 - Discord: [https://discord.gg/tPHVWBPedt](https://discord.gg/tPHVWBPedt)
 - Security issues: follow our [Security Policy](https://github.com/sonolink/arbiterer/blob/main/.github/SECURITY.md) and do not report them in public issues.
 - See also our [Terms of Service](https://github.com/sonolink/arbiterer/blob/main/TERMS.md).
