@@ -18,7 +18,10 @@ package github
 
 import "testing"
 
-const testRepository = "sonolink/arbiterer"
+const (
+	testRepository  = "sonolink/arbiterer"
+	testWorkflowSHA = "0123456789abcdef0123456789abcdef01234567"
+)
 
 // TestTokenClaims covers which claims a token has to carry. Links are scoped by
 // repository id, so it has to fail rather than fall back to zero. run_id and
@@ -33,6 +36,8 @@ func TestTokenClaims(t *testing.T) {
 		Repository:        testRepository,
 		RunID:             "15",
 		CheckRunID:        "42",
+		WorkflowRef:       testRepository + "/.github/workflows/ci.yml@refs/heads/main",
+		WorkflowSHA:       testWorkflowSHA,
 	}
 
 	// without returns a copy of full with one claim emptied.
@@ -56,6 +61,8 @@ func TestTokenClaims(t *testing.T) {
 				Repository:        testRepository,
 				RunID:             15,
 				CheckRunID:        42,
+				WorkflowRef:       testRepository + "/.github/workflows/ci.yml@refs/heads/main",
+				WorkflowSHA:       testWorkflowSHA,
 			},
 		},
 		"a missing repository id is rejected": {
@@ -82,6 +89,8 @@ func TestTokenClaims(t *testing.T) {
 				Repository:        testRepository,
 				RunID:             0,
 				CheckRunID:        42,
+				WorkflowRef:       testRepository + "/.github/workflows/ci.yml@refs/heads/main",
+				WorkflowSHA:       testWorkflowSHA,
 			},
 		},
 		"a missing check run id is allowed and left at zero": {
@@ -92,6 +101,21 @@ func TestTokenClaims(t *testing.T) {
 				Repository:        testRepository,
 				RunID:             15,
 				CheckRunID:        0,
+				WorkflowRef:       testRepository + "/.github/workflows/ci.yml@refs/heads/main",
+				WorkflowSHA:       testWorkflowSHA,
+			},
+		},
+		"a missing workflow claim is allowed and left empty": {
+			claims: without(func(tc *tokenClaims) {
+				tc.WorkflowRef = ""
+				tc.WorkflowSHA = ""
+			}),
+			want: Claims{
+				RepositoryID:      1296269,
+				RepositoryOwnerID: 583231,
+				Repository:        testRepository,
+				RunID:             15,
+				CheckRunID:        42,
 			},
 		},
 		"but a run id that is present and not a number is rejected": {

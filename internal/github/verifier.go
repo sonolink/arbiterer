@@ -55,6 +55,8 @@ type Claims struct {
 	Repository        string
 	RunID             int64
 	CheckRunID        int64
+	WorkflowRef       string
+	WorkflowSHA       string
 }
 
 // tokenClaims mirrors the claims GitHub Actions puts in an OIDC token. Numeric ids
@@ -65,6 +67,8 @@ type tokenClaims struct {
 	Repository        string `json:"repository"`
 	RunID             string `json:"run_id"`
 	CheckRunID        string `json:"check_run_id"`
+	WorkflowRef       string `json:"workflow_ref"`
+	WorkflowSHA       string `json:"workflow_sha"`
 }
 
 func (tc tokenClaims) claims() (*Claims, error) {
@@ -98,6 +102,8 @@ func (tc tokenClaims) claims() (*Claims, error) {
 		Repository:        tc.Repository,
 		RunID:             runID,
 		CheckRunID:        checkRunID,
+		WorkflowRef:       tc.WorkflowRef,
+		WorkflowSHA:       tc.WorkflowSHA,
 	}, nil
 }
 
