@@ -43,8 +43,8 @@ jobs:
             exit 1
           fi
 
-      - name: Check changelog entry
-        run: sh .github/scripts/changelog-extract.sh "${GITHUB_REF_NAME#v}"
+      - name: Check unreleased changelog entry
+        run: sh .github/scripts/changelog-extract.sh
 
       - name: Classify which tags to move
         id: version
@@ -114,3 +114,54 @@ jobs:
           else
             gh api -X POST "repos/$GITHUB_REPOSITORY/git/refs" -f ref="refs/tags/$major" -f sha="$GITHUB_SHA"
           fi
+
+  bump-version:
+    permissions:
+      contents: read
+    name: Bump version for development
+    needs: [publish]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Generate GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ secrets.APP_CLIENT_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          permission-contents: write
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          ref: ${{ github.event.release.target_commitish || github.event.repository.default_branch }}
+
+      - name: Run bump script
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        with:
+          script: |
+            const path = require('path');
+            const script = require(path.resolve('.github/scripts/bump-version.js'));
+            await script({ core, context });
+
+      - name: Get GitHub App user ID
+        id: app-user
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          echo "id=$(gh api "/users/${{ steps.app-token.outputs.app-slug }}[bot]" --jq .id)" >> "$GITHUB_OUTPUT"
+
+      - name: Commit and push version changes
+        run: |
+          git config user.name "${{ steps.app-token.outputs.app-slug }}[bot]"
+          git config user.email "${{ steps.app-user.outputs.id }}+${{ steps.app-token.outputs.app-slug }}[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No changes required"
+            exit 0
+          fi
+          git commit -m "chore(version): bump version to ${NEW_VERSION} [skip ci]"
+          git pull --rebase
+          git push

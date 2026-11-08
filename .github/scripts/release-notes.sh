@@ -12,8 +12,7 @@ set -eu
 
 version=$1
 
-notes=$(sh "$(dirname "$0")/changelog-extract.sh" "$version")
-notes=$(printf '%s' "$notes" | sed '/./,$!d')
+notes=$(sh "$(dirname "$0")/changelog-extract.sh")
 
 previous=$(git tag --list | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | awk -v cur="v$version" '
     { if ($0 == cur) { print prev; exit } prev = $0 }
