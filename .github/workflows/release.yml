@@ -44,7 +44,7 @@ jobs:
           fi
 
       - name: Check changelog entry
-        run: sh .github/scripts/changelog.sh "${GITHUB_REF_NAME#v}"
+        run: sh .github/scripts/changelog-extract.sh "${GITHUB_REF_NAME#v}"
 
       - name: Classify which tags to move
         id: version
@@ -92,6 +92,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          fetch-depth: 0
           persist-credentials: false
 
       - name: Create release
@@ -99,7 +100,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           LATEST: ${{ needs.prepare.outputs.latest }}
         run: |
-          sh .github/scripts/changelog.sh "${GITHUB_REF_NAME#v}" > notes.md
+          sh .github/scripts/release-notes.sh "${GITHUB_REF_NAME#v}" > notes.md
           gh release create "$GITHUB_REF_NAME" --verify-tag --title "$GITHUB_REF_NAME" --notes-file notes.md --latest="$LATEST"
 
       - name: Move tag
