@@ -1,7 +1,7 @@
 name: arbiterer
 
 x-app: &app
-  image: golang:1.27.3-alpine
+  image: golang:1.27.4-alpine
   env_file:
     - ./.env
   volumes:
