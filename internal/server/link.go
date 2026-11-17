@@ -39,6 +39,8 @@ const (
 	linkStateAAD       = "arbiterer/link-state/v1"
 	linkCookieAAD      = "arbiterer/link-cookie/v1"
 	linkStateCookieAAD = "arbiterer/link-state-cookie/v1"
+	actionTokenAAD     = "arbiterer/action-token/v1"
+	actionConfirmAAD   = "arbiterer/action-confirm/v1"
 )
 
 const (
@@ -56,6 +58,9 @@ const (
 
 	// linkDiscordScopes are the OAuth scopes requested from Discord.
 	linkDiscordScopes = "identify guilds.members.read"
+
+	// tokenParam is the query and form key carrying a sealed token.
+	tokenParam = "token"
 )
 
 const (
@@ -76,13 +81,14 @@ func linkExpiredf(part string) error {
 
 // linkToken is the sealed payload carried through the URL from /v1/discord/resolve.
 type linkToken struct {
-	GitHubUserID      string    `json:"github_user_id"`
-	RepositoryID      int64     `json:"repository_id"`
-	Repository        string    `json:"repository"`
-	IssueNumber       int64     `json:"issue_number"`
-	Nonce             string    `json:"nonce,omitempty"`
-	Expiry            time.Time `json:"expiry"`
-	SkipLinkedComment bool      `json:"skip_linked_comment,omitempty"`
+	GitHubUserID      string        `json:"github_user_id"`
+	RepositoryID      int64         `json:"repository_id"`
+	Repository        string        `json:"repository"`
+	IssueNumber       int64         `json:"issue_number"`
+	Nonce             string        `json:"nonce,omitempty"`
+	Expiry            time.Time     `json:"expiry"`
+	SkipLinkedComment bool          `json:"skip_linked_comment,omitempty"`
+	Action            commentAction `json:"action,omitempty"`
 }
 
 // linkCookie is the sealed handoff from the GitHub step to the Discord step.
@@ -105,7 +111,12 @@ type linkStateCookie struct {
 // sealLinkToken produces a URL-safe bearer token sealed under aad, expiring
 // after the configured lifetime.
 func (s *Server) sealLinkToken(lt linkToken, aad string) (string, error) {
-	lt.Expiry = time.Now().Add(s.cfg.LinkTokenLifetime)
+	return s.sealLinkTokenFor(lt, aad, s.cfg.LinkTokenLifetime)
+}
+
+// sealLinkTokenFor seals lt under aad, expiring after lifetime.
+func (s *Server) sealLinkTokenFor(lt linkToken, aad string, lifetime time.Duration) (string, error) {
+	lt.Expiry = time.Now().Add(lifetime)
 
 	payload, err := json.Marshal(lt)
 	if err != nil {
@@ -264,7 +275,7 @@ func (s *Server) writeLinkCookie(w http.ResponseWriter, value string, maxAge int
 
 // --- GET /v1/link?token=... ---.
 func (s *Server) handleLink(w http.ResponseWriter, r *http.Request) {
-	encoded := r.URL.Query().Get("token")
+	encoded := r.URL.Query().Get(tokenParam)
 	if encoded == "" {
 		s.writeProblem(w, r, http.StatusBadRequest, linkDetailRestart)
 		return
@@ -277,6 +288,14 @@ func (s *Server) handleLink(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	lt.Action = ""
+
+	s.startGitHubAuth(w, r, lt)
+}
+
+// startGitHubAuth binds a fresh state nonce to this browser and sends it to
+// GitHub to confirm who is following lt.
+func (s *Server) startGitHubAuth(w http.ResponseWriter, r *http.Request, lt linkToken) {
 	nonce, err := newNonce()
 	if err != nil {
 		s.logger.Error("generating nonce", "error", err)
@@ -366,7 +385,18 @@ func (s *Server) handleLinkGitHubCallback(w http.ResponseWriter, r *http.Request
 			"expected", lt.GitHubUserID,
 			"got", ghUser.ID,
 		)
+
+		if lt.Action != "" {
+			s.actionError(w, lt, linkDetailIdentityMismatch)
+			return
+		}
+
 		s.writeProblem(w, r, http.StatusBadRequest, linkDetailIdentityMismatch)
+		return
+	}
+
+	if lt.Action != "" {
+		s.runCommentAction(w, r, lt)
 		return
 	}
 

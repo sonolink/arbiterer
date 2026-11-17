@@ -184,3 +184,53 @@ func (s *Store) LinkGitHubDiscord(
 
 	return nil
 }
+
+// UnlinkGitHubUser removes the GitHub user's connection in the repository.
+func (s *Store) UnlinkGitHubUser(ctx context.Context, githubUserID string, repositoryID int64) (int64, error) {
+	n, err := s.deleteConnections(ctx, githubUserID, &repositoryID)
+	if err != nil {
+		return 0, fmt.Errorf("storage: unlink github user: %w", err)
+	}
+
+	return n, nil
+}
+
+// DeleteGitHubUser removes the GitHub user's connections in every repository.
+func (s *Store) DeleteGitHubUser(ctx context.Context, githubUserID string) (int64, error) {
+	n, err := s.deleteConnections(ctx, githubUserID, nil)
+	if err != nil {
+		return 0, fmt.Errorf("storage: delete github user: %w", err)
+	}
+
+	return n, nil
+}
+
+// deleteConnections removes the GitHub user's connections, in repositoryID
+// when it is set, and the Discord users left without a connection.
+func (s *Store) deleteConnections(ctx context.Context, githubUserID string, repositoryID *int64) (int64, error) {
+	// The outer DELETE still sees the removed rows, so they are excluded by id.
+	const query = `
+		WITH removed AS (
+			DELETE FROM github_discord_connections
+			WHERE github_user_id = $1
+				AND ($2::BIGINT IS NULL OR repository_id = $2)
+			RETURNING id, discord_user_id
+		), orphans AS (
+			DELETE FROM discord_users du
+			WHERE du.id IN (SELECT discord_user_id FROM removed)
+				AND NOT EXISTS (
+					SELECT 1
+					FROM github_discord_connections c
+					WHERE c.discord_user_id = du.id
+						AND c.id NOT IN (SELECT id FROM removed)
+				)
+		)
+		SELECT COUNT(*) FROM removed`
+
+	var n int64
+	if err := s.pool.QueryRow(ctx, query, githubUserID, repositoryID).Scan(&n); err != nil {
+		return 0, err
+	}
+
+	return n, nil
+}
