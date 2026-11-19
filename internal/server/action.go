@@ -207,9 +207,12 @@ func (s *Server) handleCommentActionConfirm(w http.ResponseWriter, r *http.Reque
 
 	status := commentUnlinked
 
+	var users []storage.DiscordUser
+
 	switch lt.Action {
 	case actionUnlink:
-		if _, err := s.store.UnlinkGitHubUser(ctx, lt.GitHubUserID, lt.RepositoryID); err != nil {
+		users, err = s.store.UnlinkGitHubUser(ctx, lt.GitHubUserID, lt.RepositoryID)
+		if err != nil {
 			s.logger.Error(
 				"unlinking github user",
 				"error", err,
@@ -219,7 +222,8 @@ func (s *Server) handleCommentActionConfirm(w http.ResponseWriter, r *http.Reque
 			return
 		}
 	case actionDelete:
-		if _, err := s.store.DeleteGitHubUser(ctx, lt.GitHubUserID); err != nil {
+		users, err = s.store.DeleteGitHubUser(ctx, lt.GitHubUserID)
+		if err != nil {
 			s.logger.Error("deleting github user", "error", err)
 			s.actionError(w, lt, linkDetailInternal)
 			return
@@ -230,6 +234,8 @@ func (s *Server) handleCommentActionConfirm(w http.ResponseWriter, r *http.Reque
 		s.actionError(w, lt, actionDetailExpired)
 		return
 	}
+
+	s.revokeDiscordTokens(ctx, users)
 
 	s.logger.Info(
 		"ran comment action",
@@ -267,6 +273,21 @@ func (s *Server) relinkComment(ctx context.Context, lt linkToken, status comment
 		false,
 	); err != nil {
 		s.logSetupCommentError(err)
+	}
+}
+
+// revokeDiscordTokens revokes the tokens of the removed Discord users.
+func (s *Server) revokeDiscordTokens(ctx context.Context, users []storage.DiscordUser) {
+	for _, user := range users {
+		accessToken, err := s.openAccessToken(&user)
+		if err != nil {
+			s.logger.Error("opening access token", "error", err)
+			continue
+		}
+
+		if err := s.discordClient.RevokeToken(ctx, accessToken); err != nil {
+			s.logger.Warn("revoking discord token", "error", err)
+		}
 	}
 }
 

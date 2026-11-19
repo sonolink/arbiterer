@@ -147,3 +147,40 @@ func (c *Client) requestToken(ctx context.Context, form url.Values) (*Token, err
 
 	return tr.token()
 }
+
+// RevokeToken revokes every token of the authorization the given token belongs to.
+func (c *Client) RevokeToken(ctx context.Context, token string) error {
+	req, err := c.newRequest(
+		ctx,
+		http.MethodPost,
+		"/oauth2/token/revoke",
+		strings.NewReader(url.Values{"token": {token}}.Encode()),
+	)
+	if err != nil {
+		return err
+	}
+
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.SetBasicAuth(c.cfg.ClientID, string(c.cfg.ClientSecret))
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	body, err := readBody(resp)
+	if err != nil {
+		return err
+	}
+
+	if resp.StatusCode == http.StatusTooManyRequests {
+		return parseRateLimitError(resp, body, parseOAuthError(resp.StatusCode, body))
+	}
+
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
+		return parseOAuthError(resp.StatusCode, body)
+	}
+
+	return nil
+}
