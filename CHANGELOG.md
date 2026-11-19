@@ -25,9 +25,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
-- A new run now resets the recheck cooldown, so the author can recheck it straight away.
-  ([#73](https://github.com/sonolink/arbiterer/pull/73))
-
 ### Security
 
 ## [1.0.0] - 2026-10-21

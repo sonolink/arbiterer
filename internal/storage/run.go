@@ -41,6 +41,7 @@ func (s *Store) UpsertPullRequestRun(
 		SET run_id = EXCLUDED.run_id,
 			last_recheck_at = CASE
 				WHEN pull_request_runs.run_id = EXCLUDED.run_id THEN pull_request_runs.last_recheck_at
+				ELSE NULL
 			END`
 
 	if _, err := s.pool.Exec(ctx, query, repositoryID, issueNumber, runID); err != nil {

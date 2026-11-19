@@ -122,7 +122,7 @@ func formatCommentText(author string, status commentStatus, linkURL, rulesURL st
 	case commentRechecking:
 		b.WriteString("Arbiterer is rechecking this pull request.")
 	case commentDeleted:
-		b.WriteString("your data has been deleted. Please follow these steps to link your accounts again:")
+		b.WriteString("your Discord <=> GitHub link has been deleted. Please follow these steps to link your accounts again:")
 	case commentRulesFailed:
 		b.WriteString("you didn't satisfy ")
 
