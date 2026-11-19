@@ -17,6 +17,7 @@ limitations under the License.
 package server
 
 import (
+	"embed"
 	"html/template"
 	"net/http"
 )
@@ -32,76 +33,15 @@ type actionPage struct {
 	Error   string
 }
 
+// templateFS holds the server's HTML templates.
+//
+//go:embed templates/*.html
+var templateFS embed.FS
+
 // actionPageTemplate asks the author to confirm an action with the browser's
 // confirm dialog, posts the token back when they do and returns them to the
 // pull request when they do not.
-var actionPageTemplate = template.Must(template.New("action").Parse(`<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="referrer" content="no-referrer">
-    <title>Arbiterer</title>
-    <style>
-      :root {
-        color-scheme: dark;
-        font-family: system-ui, sans-serif;
-      }
-
-      body {
-        display: grid;
-        place-items: center;
-        box-sizing: border-box;
-        min-height: 100vh;
-        margin: 0;
-        padding: 16px;
-        background: #0e1418;
-        color: #eef1f3;
-      }
-
-      main {
-        max-width: 420px;
-      }
-
-      a {
-        color: #6cc4cc;
-      }
-    </style>
-  </head>
-  <body>
-    <main>
-      {{- if .Error}}
-      <h1>That didn't work</h1>
-      <p>{{.Error}}</p>
-      {{- if .PRURL}}
-      <p><a href="{{.PRURL}}">Back to the pull request</a></p>
-      {{- end}}
-      {{- else}}
-      <noscript>
-        <p>Enable JavaScript to confirm, then open the link again.</p>
-        <p><a href="{{.PRURL}}">Back to the pull request</a></p>
-      </noscript>
-      <form id="form" method="post" action="{{.PostURL}}" hidden>
-        <input type="hidden" name="token" value="{{.Token}}">
-      </form>
-      <script>
-        const message = {{if eq .Action "delete" -}}
-          "Delete your data?\n\nThis removes your Discord links in every repository and the Discord tokens Arbiterer stored for you."
-        {{- else -}}
-          {{printf "Unlink your Discord account?\n\nThis removes your Discord link for %s. Its checks will ask you to link again." .Repo}}
-        {{- end}};
-
-        if (confirm(message)) {
-          document.getElementById("form").submit();
-        } else {
-          location.replace({{.PRURL}});
-        }
-      </script>
-      {{- end}}
-    </main>
-  </body>
-</html>
-`))
+var actionPageTemplate = template.Must(template.ParseFS(templateFS, "templates/action.html"))
 
 // writeActionPage renders page with status.
 func (s *Server) writeActionPage(w http.ResponseWriter, status int, page actionPage) {
