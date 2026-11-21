@@ -26,7 +26,8 @@ import (
 )
 
 // UpsertPullRequestRun stores the latest workflow run that verified the pull
-// request, replacing any previously stored one.
+// request, replacing any previously stored one. A new run clears the recheck
+// cooldown; a rerun of the same run keeps it.
 func (s *Store) UpsertPullRequestRun(
 	ctx context.Context,
 	repositoryID int64,
@@ -37,7 +38,11 @@ func (s *Store) UpsertPullRequestRun(
 		INSERT INTO pull_request_runs (repository_id, issue_number, run_id)
 		VALUES ($1, $2, $3)
 		ON CONFLICT (repository_id, issue_number) DO UPDATE
-		SET run_id = EXCLUDED.run_id`
+		SET run_id = EXCLUDED.run_id,
+			last_recheck_at = CASE
+				WHEN pull_request_runs.run_id = EXCLUDED.run_id THEN pull_request_runs.last_recheck_at
+				ELSE NULL
+			END`
 
 	if _, err := s.pool.Exec(ctx, query, repositoryID, issueNumber, runID); err != nil {
 		return fmt.Errorf("storage: upsert pull request run: %w", err)

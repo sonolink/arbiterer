@@ -184,3 +184,67 @@ func (s *Store) LinkGitHubDiscord(
 
 	return nil
 }
+
+// UnlinkGitHubUser removes the GitHub user's connection in the repository and
+// returns the Discord users removed with it.
+func (s *Store) UnlinkGitHubUser(ctx context.Context, githubUserID string, repositoryID int64) ([]DiscordUser, error) {
+	users, err := s.deleteConnections(ctx, githubUserID, &repositoryID)
+	if err != nil {
+		return nil, fmt.Errorf("storage: unlink github user: %w", err)
+	}
+
+	return users, nil
+}
+
+// DeleteGitHubUser removes the GitHub user's connections in every repository
+// and returns the Discord users removed with them.
+func (s *Store) DeleteGitHubUser(ctx context.Context, githubUserID string) ([]DiscordUser, error) {
+	users, err := s.deleteConnections(ctx, githubUserID, nil)
+	if err != nil {
+		return nil, fmt.Errorf("storage: delete github user: %w", err)
+	}
+
+	return users, nil
+}
+
+// deleteConnections removes the GitHub user's connections, in repositoryID
+// when it is set, and returns the Discord users left without a connection,
+// which it removes too.
+func (s *Store) deleteConnections(ctx context.Context, githubUserID string, repositoryID *int64) ([]DiscordUser, error) {
+	// The outer DELETE still sees the removed rows, so they are excluded by id.
+	const query = `
+		WITH removed AS (
+			DELETE FROM github_discord_connections
+			WHERE github_user_id = $1
+				AND ($2::BIGINT IS NULL OR repository_id = $2)
+			RETURNING id, discord_user_id
+		), orphans AS (
+			DELETE FROM discord_users du
+			WHERE du.id IN (SELECT discord_user_id FROM removed)
+				AND NOT EXISTS (
+					SELECT 1
+					FROM github_discord_connections c
+					WHERE c.discord_user_id = du.id
+						AND c.id NOT IN (SELECT id FROM removed)
+				)
+			RETURNING du.id, du.encrypted_access_token, du.encrypted_refresh_token, du.token_expires_at
+		)
+		SELECT id, encrypted_access_token, encrypted_refresh_token, token_expires_at FROM orphans`
+
+	rows, err := s.pool.Query(ctx, query, githubUserID, repositoryID)
+	if err != nil {
+		return nil, err
+	}
+
+	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (DiscordUser, error) {
+		var user DiscordUser
+		err := row.Scan(
+			&user.ID,
+			&user.EncryptedAccessToken,
+			&user.EncryptedRefreshToken,
+			&user.TokenExpiresAt,
+		)
+
+		return user, err
+	})
+}

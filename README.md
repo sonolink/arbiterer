@@ -65,16 +65,12 @@ If you only need authors to link their accounts, this is enough. To enforce cond
 
 ### Rechecking a pull request
 
-If a rule failed, the author can request another run without pushing:
+If a rule failed, the author can request another run without pushing by clicking **Recheck** under Arbiterer's comment. Arbiterer asks them to sign in with GitHub, reruns the check, updates the comment, and sends them back to the pull request.
 
-```text
-/arbiterer recheck
-```
-
-Arbiterer adds a thumbs-up (`👍`) reaction when it starts a manual recheck and a confused (`😕`) reaction when the recheck does not start, such as during the cooldown or when no workflow run is available. If Arbiterer cannot authenticate with GitHub, it cannot react.
+The comment also has **Unlink**, which removes the author's Discord link for the repository, and **Delete my data**, which removes their Discord links in every repository. Both ask the author to confirm first, then rerun the check and update the comment so the author can link again.
 
 > [!NOTE]
-> Only the pull request author can trigger a manual recheck, at most once every five minutes per pull request. A failed start can be retried immediately. Commands on merged pull requests, or on pull requests closed by someone other than Arbiterer, are ignored without a reaction.
+> Only the pull request author can recheck, at most once every five minutes per pull request. A failed start can be retried immediately. Merged pull requests, and pull requests closed by someone other than Arbiterer, cannot be rechecked. The links in the comment expire after 30 days.
 
 ### Closing and reopening pull requests
 

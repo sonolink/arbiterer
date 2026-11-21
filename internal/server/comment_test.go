@@ -193,7 +193,7 @@ func TestFormatCommentBody(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
-			body := formatCommentBody("vmphase", tc.status, tc.linkURL, tc.rulesURL)
+			body := formatCommentBody("vmphase", tc.status, tc.linkURL, tc.rulesURL, commentActions{})
 
 			if !strings.HasPrefix(body, "@vmphase, ") {
 				t.Errorf("body does not open by addressing the author: %q", body)

@@ -44,12 +44,15 @@ The table describes each category, why we use it, and how long we keep it.
 | GitHub OAuth and OIDC tokens     | Short-lived tokens that confirm your GitHub identity and the calling repository.                                                                                                     | GitHub sign-in and the Action        | Verify your GitHub identity and the calling repository                        | Contract             | No                                      | Discarded after use                                                                                                             |
 | Discord profile and membership   | The profile Discord returns, such as your user ID, username, display name, and avatar, and, on request, your member record in a server, such as your nickname, roles, and join date. | Discord API                          | Pass data to the repository's workflow                                        | Contract             | No                                      | Not stored by us; may appear in workflow logs                                                                                   |
 | Linking cookies and URL token    | Browser cookies and a one-time link credential that keep the linking flow tied to your browser and repository.                                                                       | Our server                           | Secure the linking flow and bind it to your browser                           | Contract             | Yes                                     | 10 minutes by default for cookies; 15 minutes by default for the URL token                                                      |
+| Comment action links             | The Recheck, Unlink, and Delete my data links in the setup comment, each carrying a sealed token with your GitHub user ID, the repository, the pull request number, and the action.  | Our server                           | Let you recheck, unlink, or delete your data from the pull request            | Contract             | Yes (in the GitHub comment)             | 30 days by default; the comment itself stays until it is deleted                                                                |
 | Server logs                      | Operational logs from our servers and hosting provider, such as errors and identifiers needed to debug problems and abuse.                                                           | Our servers and hosting provider     | Security, abuse prevention, and debugging                                     | Legitimate interests | Yes                                     | Only as long as needed                                                                                                          |
 
 We also set two linking cookies: `arbiterer_link_state` and `arbiterer_link`.
 They are `HttpOnly`, `Secure`, and `SameSite=Lax`, are limited to the `/v1/link` path, and expire after 10 minutes by default.
 The link URL also carries a sealed token with your GitHub user ID, repository, and pull request number, which expires after 15 minutes by default.
-The cookies and link token are sealed with AES-GCM under a separate configured key from the database encryption key.
+The links in the setup comment carry a sealed token with the same details and the action, which expires after 30 days by default.
+They do nothing until you sign in with GitHub as the pull request author, and Unlink and Delete my data ask you to confirm first.
+The cookies, link token, and comment link tokens are sealed with AES-GCM under a separate configured key from the database encryption key.
 
 On public repositories, Actions logs may be publicly visible.
 If this is the case, Discord profile and member data passed to a workflow may appear in those logs if a Maintainer prints it.
@@ -72,7 +75,7 @@ If you email us, we receive your email address so we can reply.
 We share data only in these situations:
 
 - The repository's workflow and Maintainers receive your link status, your Discord profile, and, when a Rule asks for it, your member record in the requested server.
-- GitHub processes data when we use its API to post comments, close and reopen pull requests, rerun the job, and serve the OIDC signing keys we use to verify the Action's token.
+- GitHub processes data when we use its API to post comments, close and reopen pull requests, rerun the Action, and serve the OIDC signing keys we use to verify the Action's token.
 - Discord processes data when we use its API to sign you in, read your profile and member record, and refresh your access.
 - Our hosting and database providers process data on our behalf so we can run the Service.
 - Authorities may receive data if the law or legal process requires it, or if we need to protect rights, safety, or the Service.
@@ -92,6 +95,7 @@ We encrypt Discord access and refresh tokens at rest with AES-256-GCM, and bind 
 We seal linking cookies and tokens with AES-GCM under a separate configured key and keep encryption keys in Docker secrets outside the database.
 The linking cookies are `HttpOnly`, `Secure`, and `SameSite=Lax`, limited to the `/v1/link` path, so browsers only send them over HTTPS.
 Linking is bound to your browser with a single-use GitHub state cookie and a matching Discord nonce, and the GitHub account must match the account the link was issued for.
+The links in the setup comment use the same GitHub sign-in and only work for the pull request author.
 The Action authenticates with a short-lived GitHub OIDC token; we verify its signature, issuer, and audience, and use its repository claims to scope the request.
 GitHub App installation tokens are limited to the repository being checked.
 
@@ -105,6 +109,10 @@ We keep link records and Discord tokens while the link exists, until you ask us 
 If your Discord authorization stops working, we stop using it and report the link as revoked, but we do not delete the record automatically.
 If you link a different Discord account, we replace the active link.
 The old Discord token record may remain until you ask us to delete it or it is no longer needed.
+
+Unlink in the setup comment deletes your link for that repository.
+Delete my data deletes your links in every repository.
+Both also delete the Discord token record once no link uses it.
 
 We keep setup comment and auto-close records while they are needed to operate the Service.
 They may remain after a pull request is closed or merged.
@@ -125,7 +133,8 @@ You can revoke GitHub access under Authorized GitHub Apps in your GitHub setting
 If you are a Maintainer, you can uninstall the App and remove the Action from your workflow.
 Revoking access does not delete data that is already stored.
 
-To access, correct, or delete your data, email [arbiterer@sonolink.dev](mailto:arbiterer@sonolink.dev).
+To delete your links yourself, use Unlink or Delete my data in Arbiterer's comment on one of your pull requests.
+To access, correct, or delete your data otherwise, email [arbiterer@sonolink.dev](mailto:arbiterer@sonolink.dev).
 Please include your GitHub username or ID, your Discord username or ID, and the repository involved.
 We may ask you to verify that you control the accounts.
 We will respond within the time required by law.
