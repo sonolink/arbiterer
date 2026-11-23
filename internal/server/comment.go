@@ -82,27 +82,33 @@ func formatCommentBody(author string, status commentStatus, linkURL, rulesURL st
 	return formatCommentText(author, status, linkURL, rulesURL) + formatCommentActions(actions)
 }
 
-// formatCommentActions renders the action links on one line.
+// formatCommentActions renders the action links as badges on one line.
 func formatCommentActions(actions commentActions) string {
 	var links []string
 
-	if actions.Recheck != "" {
-		links = append(links, fmt.Sprintf("[Recheck](%s)", actions.Recheck))
-	}
+	for _, link := range []struct {
+		url   string
+		icon  string
+		label string
+	}{
+		{actions.Recheck, "recheck.svg", "Recheck"},
+		{actions.Unlink, "unlink.svg", "Unlink"},
+		{actions.Delete, "delete.svg", "Delete my data"},
+	} {
+		if link.url == "" {
+			continue
+		}
 
-	if actions.Unlink != "" {
-		links = append(links, fmt.Sprintf("[Unlink](%s)", actions.Unlink))
-	}
-
-	if actions.Delete != "" {
-		links = append(links, fmt.Sprintf("[Delete my data](%s)", actions.Delete))
+		// The icon already shows the label, so it only goes in the alt text.
+		badge := fmt.Sprintf(`<img src=%q alt=%q height="28">`, actions.IconBase+link.icon, link.label)
+		links = append(links, fmt.Sprintf("[%s](%s)", badge, link.url))
 	}
 
 	if len(links) == 0 {
 		return ""
 	}
 
-	return "\n\n" + strings.Join(links, " · ")
+	return "\n\n" + strings.Join(links, " ")
 }
 
 // formatCommentText renders the setup comment for a contributor, with completed

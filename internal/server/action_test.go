@@ -27,6 +27,13 @@ import (
 	"time"
 )
 
+// Action link fixtures shared by the tests in this file.
+const (
+	testRecheckURL = "https://r"
+	testUnlinkURL  = "https://u"
+	testDeleteURL  = "https://d"
+)
+
 // TestCommentActionsFor covers which links each comment offers.
 func TestCommentActionsFor(t *testing.T) {
 	t.Parallel()
@@ -123,12 +130,12 @@ func TestFormatCommentActions(t *testing.T) {
 		t.Errorf("no actions rendered %q, want nothing", got)
 	}
 
-	got := formatCommentActions(commentActions{Unlink: "https://u", Delete: "https://d"})
+	got := formatCommentActions(commentActions{Unlink: testUnlinkURL, Delete: testDeleteURL})
 	if strings.Contains(got, "Recheck") {
 		t.Errorf("rendered a recheck link that was not set: %q", got)
 	}
 
-	for _, want := range []string{"[Unlink](https://u)", "(https://d)"} {
+	for _, want := range []string{"(https://u)", "(https://d)"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("actions %q missing %q", got, want)
 		}
@@ -180,12 +187,17 @@ func TestFormatCommentActionsOrder(t *testing.T) {
 	t.Parallel()
 
 	got := formatCommentActions(commentActions{
-		Recheck: "https://r",
-		Unlink:  "https://u",
-		Delete:  "https://d",
+		Recheck:  testRecheckURL,
+		Unlink:   testUnlinkURL,
+		Delete:   testDeleteURL,
+		IconBase: "https://arbiterer.test" + iconPath,
 	})
 
-	want := "\n\n[Recheck](https://r) · [Unlink](https://u) · [Delete my data](https://d)"
+	// Badges are set apart already, so they are joined without a separator.
+	want := "\n\n" +
+		`[<img src="https://arbiterer.test/v1/static/icons/recheck.svg" alt="Recheck" height="28">](https://r) ` +
+		`[<img src="https://arbiterer.test/v1/static/icons/unlink.svg" alt="Unlink" height="28">](https://u) ` +
+		`[<img src="https://arbiterer.test/v1/static/icons/delete.svg" alt="Delete my data" height="28">](https://d)`
 	if got != want {
 		t.Errorf("formatCommentActions = %q, want %q", got, want)
 	}
@@ -264,7 +276,7 @@ func TestHandleCommentActionRejects(t *testing.T) {
 
 			target := actionPath + "?" + url.Values{tokenParam: {token}}.Encode()
 			rec := httptest.NewRecorder()
-			s.handleCommentAction(rec, httptest.NewRequest(http.MethodGet, target, nil))
+			s.handleCommentAction(rec, httptest.NewRequestWithContext(t.Context(), http.MethodGet, target, http.NoBody))
 
 			if rec.Code != http.StatusBadRequest {
 				t.Errorf("status = %d, want %d", rec.Code, http.StatusBadRequest)
@@ -300,7 +312,12 @@ func TestHandleCommentActionConfirmRejects(t *testing.T) {
 			t.Parallel()
 
 			form := url.Values{tokenParam: {token}}.Encode()
-			req := httptest.NewRequest(http.MethodPost, actionPath+"/confirm", strings.NewReader(form))
+			req := httptest.NewRequestWithContext(
+				t.Context(),
+				http.MethodPost,
+				actionPath+"/confirm",
+				strings.NewReader(form),
+			)
 			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 			rec := httptest.NewRecorder()

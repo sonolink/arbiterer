@@ -51,9 +51,10 @@ const (
 
 // commentActions holds the action links shown in the setup comment.
 type commentActions struct {
-	Recheck string
-	Unlink  string
-	Delete  string
+	Recheck  string
+	Unlink   string
+	Delete   string
+	IconBase string
 }
 
 // commentActionsFor builds the action links for a comment with the given
@@ -81,6 +82,8 @@ func (s *Server) commentActionsFor(
 		Repository:   repo,
 		IssueNumber:  issueNumber,
 	}
+
+	actions.IconBase = strings.TrimSuffix(s.cfg.PublicURL, "/") + iconPath
 
 	var err error
 
