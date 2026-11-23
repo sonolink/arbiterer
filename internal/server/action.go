@@ -57,7 +57,9 @@ type commentActions struct {
 }
 
 // commentActionsFor builds the action links for a comment with the given
-// status. Recheck is only offered when the rules failed.
+// status. Recheck is offered when the rules failed, and while a recheck is
+// running so the author can retry one that never reports back; the recheck
+// cooldown stops it from being used too soon.
 func (s *Server) commentActionsFor(
 	status commentStatus,
 	repositoryID int64,
@@ -82,7 +84,7 @@ func (s *Server) commentActionsFor(
 
 	var err error
 
-	if status == commentRulesFailed {
+	if status == commentRulesFailed || status == commentRechecking {
 		actions.Recheck, err = s.actionURL(lt, actionRecheck)
 		if err != nil {
 			return commentActions{}, err

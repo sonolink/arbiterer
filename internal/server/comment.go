@@ -120,7 +120,7 @@ func formatCommentText(author string, status commentStatus, linkURL, rulesURL st
 	case commentRevoked:
 		b.WriteString("your Discord link has expired or was revoked. Please follow these steps to link it again:")
 	case commentRechecking:
-		b.WriteString("Arbiterer is rechecking this pull request.")
+		b.WriteString("Arbiterer is rechecking this pull request. If this comment hasn't updated in a few minutes, use Recheck to try again.")
 	case commentDeleted:
 		b.WriteString("your Discord <=> GitHub link has been deleted. Please follow these steps to link your accounts again:")
 	case commentRulesFailed:
