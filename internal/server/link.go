@@ -673,6 +673,22 @@ func (s *Server) rerunAfterLink(ctx context.Context, lc linkCookie) {
 		"repository", lc.Repository,
 		"job_id", jobID,
 	)
+
+	// The comment offers Recheck while this rerun finishes, so start the
+	// cooldown as a Recheck would.
+	if _, err := s.store.TakePullRequestRun(
+		ctx,
+		lc.RepositoryID,
+		lc.IssueNumber,
+		0,
+	); err != nil && !errors.Is(err, storage.ErrNotFound) {
+		s.logger.Warn(
+			"starting recheck cooldown after account link",
+			"error", err,
+			"repository", lc.Repository,
+			"issue_number", lc.IssueNumber,
+		)
+	}
 }
 
 // clearPendingRerun clears any job stored for the pull request.

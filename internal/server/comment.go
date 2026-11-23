@@ -120,7 +120,7 @@ func formatCommentText(author string, status commentStatus, linkURL, rulesURL st
 
 	switch status {
 	case commentLinked:
-		b.WriteString("your GitHub and Discord accounts are linked. Arbiterer is finishing the check.")
+		b.WriteString("your GitHub and Discord accounts are linked. Arbiterer is finishing the check. If this comment hasn't updated in a few minutes, use Recheck to try again.")
 	case commentPassed:
 		b.WriteString("you're all set — this pull request passes the check.")
 	case commentRevoked:

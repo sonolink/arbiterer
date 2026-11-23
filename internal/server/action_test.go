@@ -57,8 +57,9 @@ func TestCommentActionsFor(t *testing.T) {
 			status:      commentPassed,
 			wantAccount: true,
 		},
-		"a link confirmation offers only account links": {
+		"a link confirmation offers a retry and account links": {
 			status:      commentLinked,
+			wantRecheck: true,
 			wantAccount: true,
 		},
 		"an unlinked author has nothing to unlink": {
