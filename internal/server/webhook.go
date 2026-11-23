@@ -116,7 +116,8 @@ func (s *Server) handleGitHubWebhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if r.Header.Get(githubEventHeader) == marketplacePurchaseEvent {
+	switch event := r.Header.Get(githubEventHeader); event {
+	case marketplacePurchaseEvent:
 		var payload marketplacePurchasePayload
 		if err := json.Unmarshal(body, &payload); err != nil {
 			s.writeProblem(w, r, http.StatusBadRequest, "invalid webhook payload")
@@ -125,6 +126,8 @@ func (s *Server) handleGitHubWebhook(w http.ResponseWriter, r *http.Request) {
 		}
 
 		s.handleMarketplacePurchase(r.Context(), payload)
+	default:
+		s.logger.Debug("ignoring webhook event", "event", event)
 	}
 
 	s.writeJSON(w, http.StatusOK, struct{}{})
