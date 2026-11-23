@@ -1,0 +1,120 @@
+/*
+Copyright 2026-present SonoLink.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package discord
+
+import (
+	"errors"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+
+	"github.com/sonolink/arbiterer/internal/config"
+)
+
+// newRevokeClient builds a Client whose API is handler.
+func newRevokeClient(t *testing.T, handler http.HandlerFunc) *Client {
+	t.Helper()
+
+	server := httptest.NewServer(handler)
+	t.Cleanup(server.Close)
+
+	return NewClient(config.Discord{
+		ClientID:     "client-id",
+		ClientSecret: "client-secret",
+		APIURL:       server.URL,
+	})
+}
+
+// TestRevokeTokenSendsTheToken checks the request matches what Discord
+// documents: a form post to the revoke endpoint, authenticated as the app.
+func TestRevokeTokenSendsTheToken(t *testing.T) {
+	t.Parallel()
+
+	c := newRevokeClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/oauth2/token/revoke" {
+			t.Errorf("request = %s %s, want POST /oauth2/token/revoke", r.Method, r.URL.Path)
+		}
+
+		if got := r.Header.Get("Content-Type"); got != "application/x-www-form-urlencoded" {
+			t.Errorf("Content-Type = %q, want a form", got)
+		}
+
+		id, secret, ok := r.BasicAuth()
+		if !ok || id != "client-id" || secret != "client-secret" {
+			t.Errorf("basic auth = %q, %q, %t, want the client credentials", id, secret, ok)
+		}
+
+		if got := r.PostFormValue("token"); got != "an-access-token" {
+			t.Errorf("token = %q, want %q", got, "an-access-token")
+		}
+
+		w.WriteHeader(http.StatusOK)
+	})
+
+	if err := c.RevokeToken(t.Context(), "an-access-token"); err != nil {
+		t.Errorf("RevokeToken: %v", err)
+	}
+}
+
+// TestRevokeTokenReportsFailures checks that a refused revoke comes back as an
+// error the caller can log, and that a rate limit says when to retry.
+func TestRevokeTokenReportsFailures(t *testing.T) {
+	t.Parallel()
+
+	tests := map[string]struct {
+		status        int
+		body          string
+		wantRateLimit bool
+	}{
+		"an invalid client": {
+			status: http.StatusUnauthorized,
+			body:   `{"error":"invalid_client"}`,
+		},
+		"a rate limit": {
+			status:        http.StatusTooManyRequests,
+			body:          `{"message":"You are being rate limited.","retry_after":1.5,"global":false}`,
+			wantRateLimit: true,
+		},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			c := newRevokeClient(t, func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(tc.status)
+				_, _ = w.Write([]byte(tc.body))
+			})
+
+			err := c.RevokeToken(t.Context(), "an-access-token")
+			if err == nil {
+				t.Fatal("RevokeToken succeeded, want an error")
+			}
+
+			var rateLimit *RateLimitError
+			if errors.As(err, &rateLimit) != tc.wantRateLimit {
+				t.Errorf("RevokeToken error %v is a rate limit = %t, want %t", err, !tc.wantRateLimit, tc.wantRateLimit)
+			}
+
+			var oauthErr *OAuthError
+			if !errors.As(err, &oauthErr) || oauthErr.Status != tc.status {
+				t.Errorf("RevokeToken error %v does not carry status %d", err, tc.status)
+			}
+		})
+	}
+}

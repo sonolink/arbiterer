@@ -121,6 +121,8 @@ func TestOpenLinkTokenRejectsOtherContexts(t *testing.T) {
 		"link state":        linkStateAAD,
 		"link cookie":       linkCookieAAD,
 		"link state cookie": linkStateCookieAAD,
+		"action token":      actionTokenAAD,
+		"action confirm":    actionConfirmAAD,
 	}
 
 	for name, aad := range others {

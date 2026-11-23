@@ -115,6 +115,16 @@ func TestSetupSteps(t *testing.T) {
 			wantDone:   [2]bool{true, true},
 			wantLinkOn: -1,
 		},
+		"a recheck keeps the author linked": {
+			status:     commentRechecking,
+			wantDone:   [2]bool{true, true},
+			wantLinkOn: -1,
+		},
+		"deleted data starts again at GitHub": {
+			status:     commentDeleted,
+			wantDone:   [2]bool{false, false},
+			wantLinkOn: 0,
+		},
 	}
 
 	for name, tc := range tests {
@@ -186,6 +196,16 @@ func TestFormatCommentBody(t *testing.T) {
 		"and neither link is rendered when there is none": {
 			status:    commentRulesFailed,
 			wantSteps: false,
+		},
+		"a recheck has nothing for the author to do": {
+			status:    commentRechecking,
+			wantSteps: false,
+		},
+		"deleted data asks the author to link again": {
+			status:    commentDeleted,
+			linkURL:   testLinkURL,
+			wantSteps: true,
+			wantLink:  true,
 		},
 	}
 
