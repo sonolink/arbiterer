@@ -47,6 +47,11 @@ const (
 
 	commentRevoked     commentStatus = "revoked"
 	commentRulesFailed commentStatus = "rules_failed"
+
+	// commentRechecking and commentDeleted follow the author's Recheck and
+	// Delete my data links.
+	commentRechecking commentStatus = "rechecking"
+	commentDeleted    commentStatus = "deleted"
 )
 
 // setupSteps lists the steps a contributor must complete and links the next open step to linkURL.
@@ -55,7 +60,7 @@ func setupSteps(status commentStatus, linkURL string) []setupStep {
 	authorizeDiscord := setupStep{text: "Authorize Discord"}
 
 	switch status {
-	case commentLinked, commentPassed:
+	case commentLinked, commentPassed, commentRechecking:
 		// Nothing left to do; the comment confirms the link or clears an earlier ask.
 		authorizeGitHub.done = true
 		authorizeDiscord.done = true
@@ -71,20 +76,59 @@ func setupSteps(status commentStatus, linkURL string) []setupStep {
 	return []setupStep{authorizeGitHub, authorizeDiscord}
 }
 
-// formatCommentBody renders the setup comment for a contributor, with completed
+// formatCommentBody renders the setup comment for a contributor, followed by
+// its action links.
+func formatCommentBody(author string, status commentStatus, linkURL, rulesURL string, actions commentActions) string {
+	return formatCommentText(author, status, linkURL, rulesURL) + formatCommentActions(actions)
+}
+
+// formatCommentActions renders the action links as badges on one line.
+func formatCommentActions(actions commentActions) string {
+	var links []string
+
+	for _, link := range []struct {
+		url   string
+		icon  string
+		label string
+	}{
+		{actions.Recheck, "recheck.svg", "Recheck"},
+		{actions.Unlink, "unlink.svg", "Unlink"},
+		{actions.Delete, "delete.svg", "Delete my data"},
+	} {
+		if link.url == "" {
+			continue
+		}
+
+		// The icon already shows the label, so it only goes in the alt text.
+		badge := fmt.Sprintf(`<img src=%q alt=%q height="28">`, actions.IconBase+link.icon, link.label)
+		links = append(links, fmt.Sprintf("[%s](%s)", badge, link.url))
+	}
+
+	if len(links) == 0 {
+		return ""
+	}
+
+	return "\n\n" + strings.Join(links, " ")
+}
+
+// formatCommentText renders the setup comment for a contributor, with completed
 // steps struck through and the rules linked when they failed.
-func formatCommentBody(author string, status commentStatus, linkURL, rulesURL string) string {
+func formatCommentText(author string, status commentStatus, linkURL, rulesURL string) string {
 	var b strings.Builder
 
 	fmt.Fprintf(&b, "@%s, ", author)
 
 	switch status {
 	case commentLinked:
-		b.WriteString("your GitHub and Discord accounts are linked. Arbiterer is finishing the check.")
+		b.WriteString("your GitHub and Discord accounts are linked. Arbiterer is finishing the check. If this comment hasn't updated in a few minutes, use Recheck to try again.")
 	case commentPassed:
 		b.WriteString("you're all set — this pull request passes the check.")
 	case commentRevoked:
 		b.WriteString("your Discord link has expired or was revoked. Please follow these steps to link it again:")
+	case commentRechecking:
+		b.WriteString("Arbiterer is rechecking this pull request. If this comment hasn't updated in a few minutes, use Recheck to try again.")
+	case commentDeleted:
+		b.WriteString("your Discord <=> GitHub link has been deleted. Please follow these steps to link your accounts again:")
 	case commentRulesFailed:
 		b.WriteString("you didn't satisfy ")
 
@@ -211,12 +255,11 @@ func (s *Server) syncSetupCommentWithToken(
 		}
 	}
 
-	author, err := s.githubClient.FetchIssueAuthor(ctx, token, repo, issueNumber)
+	body, err := s.setupCommentBody(ctx, token, repositoryID, repo, issueNumber, status, linkURL, rulesURL)
 	if err != nil {
-		return fmt.Errorf("fetching issue author (%d): %w", issueNumber, err)
+		return err
 	}
 
-	body := formatCommentBody(author.Login, status, linkURL, rulesURL)
 	comment := &storage.SetupComment{
 		RepositoryID: repositoryID,
 		IssueNumber:  issueNumber,
@@ -245,6 +288,30 @@ func (s *Server) syncSetupCommentWithToken(
 	}
 
 	return s.store.UpsertSetupComment(ctx, comment)
+}
+
+// setupCommentBody renders the setup comment for the pull request author.
+func (s *Server) setupCommentBody(
+	ctx context.Context,
+	token string,
+	repositoryID int64,
+	repo string,
+	issueNumber int64,
+	status commentStatus,
+	linkURL string,
+	rulesURL string,
+) (string, error) {
+	author, err := s.githubClient.FetchIssueAuthor(ctx, token, repo, issueNumber)
+	if err != nil {
+		return "", fmt.Errorf("fetching issue author (%d): %w", issueNumber, err)
+	}
+
+	actions, err := s.commentActionsFor(status, repositoryID, repo, issueNumber, author.ID)
+	if err != nil {
+		return "", err
+	}
+
+	return formatCommentBody(author.Login, status, linkURL, rulesURL, actions), nil
 }
 
 // notifyPassed records that the author now passes the check. It updates only

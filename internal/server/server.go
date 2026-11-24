@@ -77,9 +77,12 @@ func (s *Server) addRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /v1/github/pulls/open", s.handleGitHubPullRequestOpen)
 	mux.HandleFunc("POST /v1/github/webhooks", s.handleGitHubWebhook)
 	mux.HandleFunc("GET /v1/link", s.handleLink)
+	mux.HandleFunc("GET /v1/link/action", s.handleCommentAction)
+	mux.HandleFunc("POST /v1/link/action/confirm", s.handleCommentActionConfirm)
 	mux.HandleFunc("GET /v1/link/github/callback", s.handleLinkGitHubCallback)
 	mux.HandleFunc("GET /v1/link/discord", s.handleLinkDiscord)
 	mux.HandleFunc("GET /v1/link/discord/callback", s.handleLinkDiscordCallback)
+	mux.HandleFunc("GET "+iconPath+"{name}", s.handleIcon)
 }
 
 // Run starts the HTTP server and blocks until it stops, draining in-flight

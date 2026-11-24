@@ -115,6 +115,16 @@ func TestSetupSteps(t *testing.T) {
 			wantDone:   [2]bool{true, true},
 			wantLinkOn: -1,
 		},
+		"a recheck keeps the author linked": {
+			status:     commentRechecking,
+			wantDone:   [2]bool{true, true},
+			wantLinkOn: -1,
+		},
+		"deleted data starts again at GitHub": {
+			status:     commentDeleted,
+			wantDone:   [2]bool{false, false},
+			wantLinkOn: 0,
+		},
 	}
 
 	for name, tc := range tests {
@@ -187,13 +197,23 @@ func TestFormatCommentBody(t *testing.T) {
 			status:    commentRulesFailed,
 			wantSteps: false,
 		},
+		"a recheck has nothing for the author to do": {
+			status:    commentRechecking,
+			wantSteps: false,
+		},
+		"deleted data asks the author to link again": {
+			status:    commentDeleted,
+			linkURL:   testLinkURL,
+			wantSteps: true,
+			wantLink:  true,
+		},
 	}
 
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
-			body := formatCommentBody("vmphase", tc.status, tc.linkURL, tc.rulesURL)
+			body := formatCommentBody("vmphase", tc.status, tc.linkURL, tc.rulesURL, commentActions{})
 
 			if !strings.HasPrefix(body, "@vmphase, ") {
 				t.Errorf("body does not open by addressing the author: %q", body)

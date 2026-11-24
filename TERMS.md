@@ -47,7 +47,7 @@ You may not use the Service if you are located in, organized under the laws of, 
 Arbiterer links a Contributor's GitHub account to a Discord account for a repository.
 When a Contribution is opened, the Action asks our API whether the author is linked, runs the Maintainer's Rules against the Discord data, and reports the result as a check.
 
-On repositories where the App is installed, it may read Contribution metadata, post and edit its own comments, rerun the Action job after linking, and, if the Maintainer enables it, close and reopen Contributions.
+On repositories where the App is installed, it may read Contribution metadata, post and edit its own comments, rerun the Action after linking or when the Contributor asks for a recheck, and, if the Maintainer enables it, close and reopen Contributions.
 
 Linking shows that the same browser session authorized both accounts.
 It does not verify your real-world identity, and Arbiterer is not an identity verification, background-check, or consumer-reporting service.
@@ -138,12 +138,14 @@ If you are a Contributor, you are responsible for the following.
 - Linking is per repository.
 - When you link, the repository's workflow may receive your Discord profile and, if its Rules request it, your member record in a Discord server.
 - The Maintainer controls those Rules and what they do with the data.
+- The links in Arbiterer's comment (Recheck, Unlink, and Delete my data) work only for the author of the Contribution, after signing in with GitHub.
 
 ### 7.3 Leaving the Service
 
 - You can stop using the Service at any time by revoking Arbiterer's access in Discord.
 - Revoke GitHub access too if you want to prevent re-linking.
-- Ask us to delete your data.
+- Use Unlink in Arbiterer's comment to remove your link for a repository, or Delete my data to remove your links in every repository and the Discord tokens we stored.
+- You can also ask us to delete your data.
 
 ## 8. Acceptable use
 
@@ -196,7 +198,7 @@ We are not liable for suspension or termination except as required by law.
 Sections 5, 8, 10, 12, 13, 14, 15, and 17 survive termination.
 
 When your access ends, we handle stored data as described in the Privacy Policy.
-Termination does not by itself delete stored link records; you can ask us to delete them.
+Termination does not by itself delete stored link records; you can delete them with Delete my data or ask us to delete them.
 
 ## 12. Disclaimers
 

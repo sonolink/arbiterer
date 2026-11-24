@@ -75,7 +75,7 @@ func (s *Server) linkURL(lt linkToken) (string, error) {
 	u := url.URL{
 		Path: linkPath,
 		RawQuery: url.Values{
-			"token": {token},
+			tokenParam: {token},
 		}.Encode(),
 	}
 
