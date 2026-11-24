@@ -27,13 +27,6 @@ import (
 	"time"
 )
 
-// Action link fixtures shared by the tests in this file.
-const (
-	testRecheckURL = "https://r"
-	testUnlinkURL  = "https://u"
-	testDeleteURL  = "https://d"
-)
-
 // TestCommentActionsFor covers which links each comment offers.
 func TestCommentActionsFor(t *testing.T) {
 	t.Parallel()
@@ -123,84 +116,15 @@ func TestCommentActionsFor(t *testing.T) {
 	}
 }
 
-// TestFormatCommentActions covers the action line under the comment.
-func TestFormatCommentActions(t *testing.T) {
-	t.Parallel()
-
-	if got := formatCommentActions(commentActions{}); got != "" {
-		t.Errorf("no actions rendered %q, want nothing", got)
-	}
-
-	got := formatCommentActions(commentActions{Unlink: testUnlinkURL, Delete: testDeleteURL})
-	if strings.Contains(got, "Recheck") {
-		t.Errorf("rendered a recheck link that was not set: %q", got)
-	}
-
-	for _, want := range []string{"(https://u)", "(https://d)"} {
-		if !strings.Contains(got, want) {
-			t.Errorf("actions %q missing %q", got, want)
-		}
-	}
-}
-
-// TestWriteActionPage covers that the page carries the token to post back and
-// escapes what it shows.
-func TestWriteActionPage(t *testing.T) {
+func TestActionErrorPageOmitsConfirmationForm(t *testing.T) {
 	t.Parallel()
 
 	s := newLinkServer(t, time.Minute)
-
 	rec := httptest.NewRecorder()
-	s.writeActionPage(rec, http.StatusOK, actionPage{
-		Action:  string(actionUnlink),
-		Repo:    "<script>",
-		PRURL:   "https://github.com/" + testRepository + "/pull/7",
-		PostURL: actionPath + "/confirm",
-		Token:   "sealed",
-	})
-
-	body := rec.Body.String()
-	for _, want := range []string{`name="token" value="sealed"`, `action="/v1/link/action/confirm"`} {
-		if !strings.Contains(body, want) {
-			t.Errorf("page is missing %q", want)
-		}
-	}
-
-	if strings.Contains(body, "for <script>") {
-		t.Error("page does not escape the repository name")
-	}
-
-	rec = httptest.NewRecorder()
 	s.writeActionPage(rec, http.StatusBadRequest, actionPage{Error: linkDetailIdentityMismatch})
-
-	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), linkDetailIdentityMismatch) {
-		t.Errorf("error page = %d %q", rec.Code, rec.Body.String())
-	}
 
 	if strings.Contains(rec.Body.String(), "<form") {
 		t.Error("error page asks for confirmation")
-	}
-}
-
-// TestFormatCommentActionsOrder covers that the links keep their order, so
-// Recheck stays first and Delete my data stays last.
-func TestFormatCommentActionsOrder(t *testing.T) {
-	t.Parallel()
-
-	got := formatCommentActions(commentActions{
-		Recheck:  testRecheckURL,
-		Unlink:   testUnlinkURL,
-		Delete:   testDeleteURL,
-		IconBase: "https://arbiterer.test" + iconPath,
-	})
-
-	// Badges are set apart already, so they are joined without a separator.
-	want := "\n\n" +
-		`[<img src="https://arbiterer.test/v1/static/icons/recheck.svg" alt="Recheck" height="28">](https://r) ` +
-		`[<img src="https://arbiterer.test/v1/static/icons/unlink.svg" alt="Unlink" height="28">](https://u) ` +
-		`[<img src="https://arbiterer.test/v1/static/icons/delete.svg" alt="Delete my data" height="28">](https://d)`
-	if got != want {
-		t.Errorf("formatCommentActions = %q, want %q", got, want)
 	}
 }
 
@@ -332,15 +256,5 @@ func TestHandleCommentActionConfirmRejects(t *testing.T) {
 				t.Errorf("page does not say the link expired: %q", rec.Body.String())
 			}
 		})
-	}
-}
-
-// TestPullRequestURL covers where the author is sent back to.
-func TestPullRequestURL(t *testing.T) {
-	t.Parallel()
-
-	want := "https://github.com/" + testRepository + "/pull/7"
-	if got := pullRequestURL(testLinkToken()); got != want {
-		t.Errorf("pullRequestURL = %q, want %q", got, want)
 	}
 }

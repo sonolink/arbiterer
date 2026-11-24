@@ -229,10 +229,9 @@ func TestSetupCommentStoresActionStatuses(t *testing.T) {
 	}
 }
 
-// TestTakePullRequestRunWithoutCooldownStartsOne checks that the rerun after
-// linking, which ignores the cooldown, still starts it. The comment offers
-// Recheck while that rerun finishes.
-func TestTakePullRequestRunWithoutCooldownStartsOne(t *testing.T) {
+// TestTakePullRequestRunWithoutCooldown checks that the rerun after linking
+// starts a cooldown when none exists and can bypass an active cooldown.
+func TestTakePullRequestRunWithoutCooldown(t *testing.T) {
 	t.Parallel()
 
 	ctx := t.Context()
@@ -247,6 +246,15 @@ func TestTakePullRequestRunWithoutCooldownStartsOne(t *testing.T) {
 	}
 
 	if _, err := testStore.TakePullRequestRun(ctx, repositoryID, issueNumber, recheckCooldown); !errors.Is(err, storage.ErrCooldown) {
-		t.Errorf("TakePullRequestRun error = %v, want ErrCooldown", err)
+		t.Fatalf("TakePullRequestRun during cooldown error = %v, want ErrCooldown", err)
+	}
+
+	gotRunID, err := testStore.TakePullRequestRun(ctx, repositoryID, issueNumber, 0)
+	if err != nil {
+		t.Fatalf("TakePullRequestRun with zero cooldown during an active cooldown: %v", err)
+	}
+
+	if gotRunID != runID {
+		t.Errorf("TakePullRequestRun = %d, want %d", gotRunID, runID)
 	}
 }
