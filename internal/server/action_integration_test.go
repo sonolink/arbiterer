@@ -139,20 +139,15 @@ func TestDeleteGitHubUserRemovesEveryLink(t *testing.T) {
 	if _, err := testStore.DiscordUserByID(t.Context(), other.ID); err != nil {
 		t.Errorf("another author's account was removed: %v", err)
 	}
-}
 
-// TestDeleteGitHubUserWithoutLinks checks that deleting an author with nothing
-// stored is not an error, since the link in the comment can be followed twice.
-func TestDeleteGitHubUserWithoutLinks(t *testing.T) {
-	t.Parallel()
-
-	removed, err := testStore.DeleteGitHubUser(t.Context(), strconv.FormatInt(nextID(), 10))
+	// The author can follow the same deletion link twice.
+	removed, err = testStore.DeleteGitHubUser(t.Context(), githubUserID)
 	if err != nil {
-		t.Fatalf("DeleteGitHubUser: %v", err)
+		t.Fatalf("DeleteGitHubUser on retry: %v", err)
 	}
 
 	if len(removed) != 0 {
-		t.Errorf("DeleteGitHubUser = %+v, want nothing", removed)
+		t.Errorf("DeleteGitHubUser on retry = %+v, want nothing", removed)
 	}
 }
 

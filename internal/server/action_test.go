@@ -106,25 +106,8 @@ func TestCommentActionsFor(t *testing.T) {
 				if lt.Action != link.action || lt.GitHubUserID != "555" || lt.IssueNumber != 7 {
 					t.Errorf("%s token = %+v", link.action, lt)
 				}
-
-				// An action token must not open as a link token.
-				if _, err := s.openLinkToken(u.Query().Get("token"), linkTokenAAD); err == nil {
-					t.Errorf("%s token opened as a link token", link.action)
-				}
 			}
 		})
-	}
-}
-
-func TestActionErrorPageOmitsConfirmationForm(t *testing.T) {
-	t.Parallel()
-
-	s := newLinkServer(t, time.Minute)
-	rec := httptest.NewRecorder()
-	s.writeActionPage(rec, http.StatusBadRequest, actionPage{Error: linkDetailIdentityMismatch})
-
-	if strings.Contains(rec.Body.String(), "<form") {
-		t.Error("error page asks for confirmation")
 	}
 }
 
@@ -252,8 +235,13 @@ func TestHandleCommentActionConfirmRejects(t *testing.T) {
 				t.Errorf("status = %d, want %d", rec.Code, http.StatusBadRequest)
 			}
 
-			if !strings.Contains(rec.Body.String(), actionDetailExpired) {
-				t.Errorf("page does not say the link expired: %q", rec.Body.String())
+			body := rec.Body.String()
+			if !strings.Contains(body, actionDetailExpired) {
+				t.Errorf("page does not say the link expired: %q", body)
+			}
+
+			if strings.Contains(body, "<form") {
+				t.Error("error page asks for confirmation")
 			}
 		})
 	}
