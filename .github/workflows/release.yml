@@ -56,35 +56,35 @@ jobs:
           echo "latest=$(is "$(echo "$releases" | tail -n 1)")" >> "$GITHUB_OUTPUT"
           echo "latest_in_major=$(is "$(echo "$releases" | grep "^$major\." | tail -n 1)")" >> "$GITHUB_OUTPUT"
 
-  image:
-    name: Image
-    needs: [prepare]
-    permissions:
-      contents: read
-      packages: write
-    uses: ./.github/workflows/promote-image.yml
-    with:
-      tags: |
-        type=semver,pattern={{version}}
-        type=semver,pattern={{major}}.{{minor}}
-        type=semver,pattern={{major}},enable=${{ needs.prepare.outputs.latest_in_major }}
-        type=raw,value=latest,enable=${{ needs.prepare.outputs.latest }}
+  # image:
+  #   name: Image
+  #   needs: [prepare]
+  #   permissions:
+  #     contents: read
+  #     packages: write
+  #   uses: ./.github/workflows/promote-image.yml
+  #   with:
+  #     tags: |
+  #       type=semver,pattern={{version}}
+  #       type=semver,pattern={{major}}.{{minor}}
+  #       type=semver,pattern={{major}},enable=${{ needs.prepare.outputs.latest_in_major }}
+  #       type=raw,value=latest,enable=${{ needs.prepare.outputs.latest }}
 
-  deploy:
-    name: Deploy
-    needs: [image]
-    permissions:
-      contents: read
-      packages: read
-    uses: ./.github/workflows/deploy.yml
-    secrets: inherit
-    with:
-      environment: production
-      image: ${{ needs.image.outputs.image }}
+  # deploy:
+  #   name: Deploy
+  #   needs: [image]
+  #   permissions:
+  #     contents: read
+  #     packages: read
+  #   uses: ./.github/workflows/deploy.yml
+  #   secrets: inherit
+  #   with:
+  #     environment: production
+  #     image: ${{ needs.image.outputs.image }}
 
   publish:
     name: Publish
-    needs: [prepare, deploy]
+    needs: [prepare] # [prepare, deploy]
     permissions:
       contents: write
     runs-on: ubuntu-latest
