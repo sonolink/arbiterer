@@ -29,8 +29,9 @@ jobs:
 
       - name: Check branch
         run: |
-          if ! git merge-base --is-ancestor HEAD origin/main; then
-            echo "::error::$GITHUB_REF_NAME does not point at a commit on main"
+          if ! git merge-base --is-ancestor HEAD origin/main \
+              && ! git merge-base --is-ancestor HEAD origin/release/1.0.x; then
+            echo "::error::$GITHUB_REF_NAME does not point at a commit on main or release/1.0.x"
             exit 1
           fi
 
